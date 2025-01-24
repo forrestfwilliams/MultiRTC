@@ -25,7 +25,7 @@ LAYER_NAME_DEM = 'interpolated_dem'
 
 
 def compute_correction_lut(
-    burst_in,
+    burst,
     dem_raster,
     scratch_path,
     rg_step_meters,
@@ -66,17 +66,17 @@ def compute_correction_lut(
     az_lut = None
 
     # approximate conversion of az_step_meters from meters to seconds
-    numrow_orbit = burst_in.orbit.position.shape[0]
-    vel_mid = burst_in.orbit.velocity[numrow_orbit // 2, :]
+    numrow_orbit = burst.orbit.position.shape[0]
+    vel_mid = burst.orbit.velocity[numrow_orbit // 2, :]
     spd_mid = np.linalg.norm(vel_mid)
-    pos_mid = burst_in.orbit.position[numrow_orbit // 2, :]
+    pos_mid = burst.orbit.position[numrow_orbit // 2, :]
     alt_mid = np.linalg.norm(pos_mid)
 
     r = 6371000.0  # geometric mean of WGS84 ellipsoid
 
     az_step_sec = (az_step_meters * alt_mid) / (spd_mid * r)
     # Bistatic - azimuth direction
-    bistatic_delay = burst_in.bistatic_delay(range_step=rg_step_meters, az_step=az_step_sec)
+    bistatic_delay = burst.bistatic_delay(range_step=rg_step_meters, az_step=az_step_sec)
 
     if apply_bistatic_delay_correction:
         az_lut = isce3.core.LUT2d(
@@ -95,12 +95,12 @@ def compute_correction_lut(
     proj = isce3.core.make_projection(epsg)
     ellipsoid = proj.ellipsoid
 
-    rdr_grid = burst_in.as_isce3_radargrid(az_step=az_step_sec, rg_step=rg_step_meters)
+    rdr_grid = burst.as_isce3_radargrid(az_step=az_step_sec, rg_step=rg_step_meters)
 
     grid_doppler = isce3.core.LUT2d()
 
     # Initialize the rdr2geo object
-    rdr2geo_obj = isce3.geometry.Rdr2Geo(rdr_grid, burst_in.orbit, ellipsoid, grid_doppler, threshold=1.0e-8)
+    rdr2geo_obj = isce3.geometry.Rdr2Geo(rdr_grid, burst.orbit, ellipsoid, grid_doppler, threshold=1.0e-8)
 
     # Get the rdr2geo raster needed for SET computation
     topo_output = {
@@ -144,7 +144,7 @@ def compute_correction_lut(
 
 
 def apply_slc_corrections(
-    burst_in: Sentinel1BurstSlc,
+    burst: Sentinel1BurstSlc,
     path_slc_vrt: str,
     path_slc_out: str,
     flag_output_complex: bool = False,
@@ -172,14 +172,14 @@ def apply_slc_corrections(
     """
 
     # Load the SLC of the burst
-    burst_in.slc_to_vrt_file(path_slc_vrt)
+    burst.slc_to_vrt_file(path_slc_vrt)
     slc_gdal_ds = gdal.Open(path_slc_vrt)
     arr_slc_from = slc_gdal_ds.ReadAsArray()
 
     # Apply thermal noise correction
     if flag_thermal_correction:
         logger.info('    applying thermal noise correction to burst SLC')
-        corrected_image = np.abs(arr_slc_from) ** 2 - burst_in.thermal_noise_lut
+        corrected_image = np.abs(arr_slc_from) ** 2 - burst.thermal_noise_lut
         min_backscatter = 0
         max_backscatter = None
         corrected_image = np.clip(corrected_image, min_backscatter, max_backscatter)
@@ -189,7 +189,7 @@ def apply_slc_corrections(
     # Apply absolute radiometric correction
     if flag_apply_abs_rad_correction:
         logger.info('    applying absolute radiometric correction to burst SLC')
-        corrected_image = corrected_image / burst_in.burst_calibration.beta_naught**2
+        corrected_image = corrected_image / burst.burst_calibration.beta_naught**2
 
     # Output as complex
     if flag_output_complex:
@@ -202,7 +202,7 @@ def apply_slc_corrections(
 
     # Save the corrected image
     drvout = gdal.GetDriverByName('GTiff')
-    raster_out = drvout.Create(path_slc_out, burst_in.shape[1], burst_in.shape[0], 1, dtype)
+    raster_out = drvout.Create(path_slc_out, burst.shape[1], burst.shape[0], 1, dtype)
     band_out = raster_out.GetRasterBand(1)
     band_out.WriteArray(corrected_image)
     band_out.FlushCache()
@@ -213,7 +213,7 @@ def compute_layover_shadow_mask(
     radar_grid: isce3.product.RadarGridParameters,
     orbit: isce3.core.Orbit,
     geogrid_in: isce3.product.GeoGridParameters,
-    burst_in: Sentinel1BurstSlc,
+    burst: Sentinel1BurstSlc,
     dem_raster: isce3.io.Raster,
     filename_out: str,
     output_raster_format: str,
@@ -278,7 +278,7 @@ def compute_layover_shadow_mask(
     """
 
     # determine the output filename
-    str_datetime = burst_in.sensing_start.strftime('%Y%m%d_%H%M%S.%f')
+    str_datetime = burst.sensing_start.strftime('%Y%m%d_%H%M%S.%f')
 
     # Run topo to get layover/shadow mask
     ellipsoid = isce3.core.Ellipsoid()
@@ -304,7 +304,7 @@ def compute_layover_shadow_mask(
             path_layover_shadow_mask_file, radar_grid.width, radar_grid.length, 1, gdal.GDT_Byte, 'GTiff'
         )
     else:
-        path_layover_shadow_mask = f'layover_shadow_mask_{burst_in.burst_id}_{burst_in.polarization}_{str_datetime}'
+        path_layover_shadow_mask = f'layover_shadow_mask_{burst.burst_id}_{burst.polarization}_{str_datetime}'
         slantrange_layover_shadow_mask_raster = isce3.io.Raster(
             path_layover_shadow_mask, radar_grid.width, radar_grid.length, 1, gdal.GDT_Byte, 'MEM'
         )
@@ -522,8 +522,6 @@ def run_single_job(product_id: str, burst: Sentinel1BurstSlc, geogrid, opts: Rtc
 
     raster_format = 'GTiff'
     raster_extension = 'tif'
-
-    burst_id = str(burst.burst_id)
     output_dir = str(opts.output_dir)
     os.makedirs(output_dir, exist_ok=True)
 
@@ -592,7 +590,7 @@ def run_single_job(product_id: str, burst: Sentinel1BurstSlc, geogrid, opts: Rtc
 
     # Calculate layover/shadow mask
     layover_shadow_mask_file = f'{output_dir}/{product_id}_{LAYER_NAME_LAYOVER_SHADOW_MASK}.{raster_extension}'
-    logger.info(f'    computing layover shadow mask for {burst_id}')
+    logger.info(f'    computing layover shadow mask for {product_id}')
     radar_grid_layover_shadow_mask = radar_grid
     slantrange_layover_shadow_mask_raster = compute_layover_shadow_mask(
         radar_grid_layover_shadow_mask,
