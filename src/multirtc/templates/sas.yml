@@ -1,0 +1,125 @@
+runconfig:
+    name: rtc_s1_workflow_default
+
+    groups:
+        pge_name_group:
+            pge_name: RTC_S1_PGE
+
+        input_file_group:
+            # Required. List of SAFE files (min=1)
+            safe_file_path:
+                - {{  granule_path  }}
+            # Optional. Burst ID to process (empty for all bursts)
+            burst_id: {% if bursts %}{% for item in bursts %}
+                - {{ item }}{% endfor %}{% endif %}
+            # Required. List of orbit (EOF) files (min=1)
+            orbit_file_path:
+                - {{  orbit_path  }}
+            # Location from where the source data can be retrieved (URL or DOI)
+            source_data_access: "https://search.asf.alaska.edu/#/?dataset=SENTINEL-1&productTypes=SLC"
+
+        # This section should match the DynamicAncillaryFilesGroup of the PGE RunConfig
+        dynamic_ancillary_file_group:
+            # Digital elevation model
+            dem_file: {{  dem_path  }}
+            dem_file_description: "Digital Elevation Model (DEM) for the NASA OPERA project version 1.1 (v1.1) based on the Copernicus DEM 30-m and Copernicus 90-m referenced to the WGS84 ellipsoid"
+
+        static_ancillary_file_group:
+            # burst database sqlite file
+            burst_database_file: {{  db_path  }}
+
+        product_group:
+            product_version: "1.0"
+
+            # This should match the path used for OutputProductPath
+            product_path: {{  output_dir  }}
+
+            # This should match the path used for ScratchPath
+            scratch_path: {{  scratch_dir  }}
+
+            # This should match the path used for OutputProductPath
+            output_dir: {{  output_dir  }}
+
+            # Validity start date for RTC-S1-STATIC products in the format YYYYMMDD,
+            # This field must be provided for RTC-S1 jobs when static layer
+            # generation is enabled, and should match the value assigned to
+            # DataValidityStartDate above.
+            rtc_s1_static_validity_start_date: 20140403
+
+            # Location from where the output product can be retrieved (URL or DOI)
+            product_data_access: "https://search.asf.alaska.edu/#/?dataset=OPERA-S1&productTypes=RTC"
+
+            # Location from where the static layers product can be retrieved
+            # The {burst_id} and {end_date} are template placeholders that will be
+            # filled in by the SAS if they are present in the string defined in this config
+            static_layers_data_access: "https://search.asf.alaska.edu/#/?dataset=OPERA-S1&productTypes=RTC-STATIC&operaBurstID={burst_id}&end={end_date}"
+
+            # RTC-S1 imagery
+            save_bursts: True
+
+            # Save mosaic of RTC-S1 bursts
+            save_mosaics: False
+
+            # Save browse image(s)
+            save_browse: True
+
+            output_imagery_format: COG
+
+            # Save RTC-S1 metadata in the HDF5 format
+            # Optional for `output_imagery_format` equal to 'ENVI', 'GTiff', or
+            # 'COG', and enabled by default for `output_imagery_format` equal
+            # to 'HDF5' or 'NETCDF' or `save_secondary_layers_as_hdf5` is True
+            save_metadata: True
+
+        primary_executable:
+            # Must be one of RTC_S1 or RTC_S1_STATIC, this determines the type of
+            # output product created
+            product_type: RTC_S1
+
+        # SLC processing options
+        # Consult the RTC-S1 SAS User's Guide for more info on each field
+        processing:
+
+            # Check if ancillary input covers entirely output products
+            check_ancillary_inputs_coverage: True
+
+            # Polarization channels to process.
+            polarization: dual-pol
+
+            rtc:
+                output_type: gamma0
+
+            # OPTIONAL - to provide the number of processes when processing the bursts in parallel
+            # "0" means that the number will be automatically decided based on
+            # the number of cores, `OMP_NUM_THREADS` in environment setting,
+            # and the number of burst to process in runconfig
+            num_workers: 0
+
+            # OPTIONAL - Mechanism to specify output posting and DEM
+            geocoding:
+                # OPTIONAL - Choices: "single_block", "geogrid", "geogrid_and_radargrid",
+                # and "auto" (default)
+                memory_mode: auto
+
+                bursts_geogrid:
+                    x_posting: {{  resolution  }} 
+                    y_posting: {{  resolution  }} 
+                    x_snap: {{  resolution  }} 
+                    y_snap: {{  resolution  }} 
+                    top_left:
+                        x:
+                        y:
+                    bottom_right:
+                        x:
+                        y:
+
+                # Fields to populate the products' metadata required by
+                # CEOS Analysis Ready Data specifications
+                estimated_geometric_accuracy_bias_x: -0.72
+                estimated_geometric_accuracy_bias_y: -0.67
+                estimated_geometric_accuracy_stddev_x: 0.7
+                estimated_geometric_accuracy_stddev_y: 0.62
+
+            mosaicking:
+                # Mosaic mode - Choices: "average", "first", "bursts_center" (default)
+                mosaic_mode: first

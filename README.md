@@ -1,0 +1,5 @@
+# MultiRTC
+
+A python library for creating ISCE3-based OPERA RTCs from Sentinel-1 Burst and Umbra SICD data.
+
+**ALL CREDIT FOR THIS LIBRARY'S RTC PRODUCTS GOES TO GUSTAVO SHIROMA AND THE [JPL OPERA TEAM](https://www.jpl.nasa.gov/go/opera). THIS PLUGIN MERELY ALLOWS OTHERS TO USE THEIR WORKFLOW FOR OTHER SENSORS.

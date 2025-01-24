@@ -1,0 +1,92 @@
+[build-system]
+requires = ["setuptools>=61.0", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "multirtc"
+requires-python = ">=3.9"
+authors = [
+    {name="Forrest Williams", email="ffwilliams2@alaska.edu"},
+]
+description = "Python library for multi-sensor RTC processing using the OPERA algorithm"
+license = {text = "BSD-3-Clause"}
+classifiers=[
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+]
+dependencies = [
+    "gdal",
+    "numpy",
+    "shapely",
+    "earthaccess",
+    "s1reader",
+    "requests",
+    "urllib3",
+    "lxml",
+    "burst2safe",
+    # "isce3", Not on pip
+]
+dynamic = ["version", "readme"]
+
+[project.optional-dependencies]
+develop = [
+    "pytest",
+    "pytest-cov",
+    "pytest-console-scripts",
+    "ruff",
+]
+
+[project.urls]
+Homepage = "https://github.com/forrestfwilliams/multirtc"
+Documentation = "https://github.com/forrestfwilliams/multirtc"
+
+[project.scripts]
+prep_burst = "multirtc.prep_burst:main"
+multirtc = "multirtc.multirtc:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+script_launch_mode = "subprocess"
+
+[tool.setuptools]
+include-package-data = true
+zip-safe = false
+
+[tool.setuptools.dynamic]
+readme = {file = ["README.md"], content-type = "text/markdown"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools_scm]
+
+[tool.ruff]
+line-length = 120
+# The directories to consider when resolving first- vs. third-party imports.
+# See: https://docs.astral.sh/ruff/settings/#src
+src = ["src", "tests"]
+
+[tool.ruff.format]
+indent-style = "space"
+quote-style = "single"
+
+[tool.ruff.lint]
+extend-select = [
+    "I",   # isort: https://docs.astral.sh/ruff/rules/#isort-i
+    "UP",  # pyupgrade: https://docs.astral.sh/ruff/rules/#pyupgrade-up
+    # TODO: Uncomment the following extensions and address their warnings:
+    # "D",   # pydocstyle: https://docs.astral.sh/ruff/rules/#pydocstyle-d
+    # "ANN", # annotations: https://docs.astral.sh/ruff/rules/#flake8-annotations-ann
+    # "PTH", # use-pathlib-pth: https://docs.astral.sh/ruff/rules/#flake8-use-pathlib-pth
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+case-sensitive = true
+lines-after-imports = 2
