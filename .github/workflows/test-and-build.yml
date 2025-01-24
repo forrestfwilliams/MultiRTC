@@ -13,7 +13,7 @@ on:
 jobs:
   call-pytest-workflow:
     # Docs: https://github.com/ASFHyP3/actions
-    uses: ASFHyP3/actions/.github/workflows/reusable-pytest.yml@v0.14.0
+    uses: ASFHyP3/actions/.github/workflows/reusable-pytest.yml@v0.15.0
     with:
       local_package_name: hyp3_opera_rtc
       python_versions: >-
