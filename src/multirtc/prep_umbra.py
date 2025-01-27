@@ -53,9 +53,9 @@ class UmbraSICD:
         x_vel = polyval(scp_tcoa, x_vel_coeff)
         y_vel = polyval(scp_tcoa, y_vel_coeff)
         z_vel = polyval(scp_tcoa, z_vel_coeff)
-
+        
         sv = isce3.core.StateVector(sensing_start, [x_pos, y_pos, z_pos], [x_vel, y_vel, z_vel])
-        return isce3.core.Orbit([sv], sensing_start - timedelta(days=2))
+        return isce3.core.Orbit([sv], sensing_start - timedelta(minutes=5))
 
     @classmethod
     def from_sarpy_sicd(cls, sicd):
@@ -63,27 +63,27 @@ class UmbraSICD:
         wavelength = isce3.core.speed_of_light / center_frequency
         lookside = isce3.core.LookSide.Right if sicd.SCPCOA.SideOfTrack == 'R' else isce3.core.LookSide.Left
         sensing_period_start = sicd.Timeline.CollectStart.astype('M8[ms]').astype('O')
-        sensing_start = isce3.core.DateTime(sensing_period_start + timedelta(sicd.ImageFormation.TStartProc))
-        sensing_end = isce3.core.DateTime(sensing_period_start + timedelta(sicd.ImageFormation.TEndProc))
+        sensing_start = sensing_period_start + timedelta(sicd.ImageFormation.TStartProc)
+        sensing_end = sensing_period_start + timedelta(sicd.ImageFormation.TEndProc)
         ipp = list(sicd.Timeline.IPP)[0]
         prf = (ipp.IPPEnd - ipp.IPPStart) / (ipp.TEnd - ipp.TStart)  # not sure if this is correct
         range_step = sicd.Grid.Row.SS
         footprint = Polygon([(ic.Lon, ic.Lat) for ic in sicd.GeoData.ImageCorners])
+        breakpoint()
         umbra_sicd = cls(
             id=sicd.CollectionInfo.CoreName,
             wavelength=wavelength,
             lookside=lookside,
             prf=prf,
             range_step=range_step,
-            sensing_start=sensing_start,
-            sensing_end=sensing_end,
+            sensing_start=isce3.core.DateTime(sensing_start),
+            sensing_end=isce3.core.DateTime(sensing_end),
             orbit=cls.calculate_orbit(sensing_start, sicd.Grid.TimeCOAPoly.Coefs[0, 0], sicd.Position.ARPPoly),
             shape=(sicd.ImageData.NumRows, sicd.ImageData.NumCols),
             starting_range=sicd.SCPCOA.SlantRange,  # Range at scene center, not starting range
             bounding_box=footprint.bounds,
             bounding_box_epsg=4326,
         )
-        breakpoint()
         return umbra_sicd
 
 
