@@ -13,6 +13,7 @@ dependencies:
   - shapely
   - s1reader>=0.2.4
   - isce3==0.15.0
+  - sarpy
   - earthaccess
   - burst2safe
   # Workaround for the issue with `libabseil` (09/11/2023)

@@ -3,19 +3,17 @@ from pathlib import Path
 from shutil import make_archive
 from typing import Optional
 
+import s1reader
 from burst2safe.burst2safe import burst2safe
 
 from multirtc import dem, orbit, utils
 
 
-def prep_burst(
-    granules: list[str],
-    work_dir: Optional[Path] = None,
-) -> Path:
+def prep_burst(granule: str, work_dir: Optional[Path] = None) -> Path:
     """Prepare data for burst-based processing.
 
     Args:
-        granules: Sentinel-1 burst SLC granules to create RTC dataset for
+        granule: Sentinel-1 burst SLC granule to create RTC dataset for
         use_resorb: Use the RESORB orbits instead of the POEORB orbits
         work_dir: Working directory for processing
     """
@@ -25,7 +23,7 @@ def prep_burst(
     print('Downloading data...')
 
     if len(list(work_dir.glob('S1*.zip'))) == 0:
-        granule_path = burst2safe(granules=granules, all_anns=True, work_dir=work_dir)
+        granule_path = burst2safe(granules=[granule], all_anns=True, work_dir=work_dir)
         make_archive(base_name=str(granule_path.with_suffix('')), format='zip', base_dir=str(granule_path))
         granule = granule_path.with_suffix('').name
         granule_path = granule_path.with_suffix('.zip')
@@ -37,22 +35,21 @@ def prep_burst(
     else:
         orbit_path = work_dir / list(work_dir.glob('*.EOF'))[0].name
 
-    db_path = utils.download_burst_db(work_dir)
-
     dem_path = work_dir / 'dem.tif'
     granule_bbox = utils.get_s1_granule_bbox(granule_path)
     dem.download_opera_dem_for_footprint(dem_path, granule_bbox)
-    return granule_path, orbit_path, db_path, dem_path
+    burst = s1reader.load_bursts(str(granule_path), str(orbit_path), 1, 'VV')[0]
+    return burst, dem_path
 
 
 def main():
     """Prep SLC entrypoint.
 
     Example command:
-    prep_burst S1_136231_IW2_20200604T022312_VV_7C85-BURST S1_136231_IW2_20200604T022312_VH_7C85-BURST
+    prep_burst S1_136231_IW2_20200604T022312_VV_7C85-BURST
     """
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('granules', nargs='+', help='S1 burst granules to load data for.')
+    parser.add_argument('granule', help='S1 burst granule to load data for.')
     parser.add_argument('--work-dir', default=None, help='Working directory for processing')
 
     args = parser.parse_args()

@@ -34,26 +34,6 @@ def download_file(
     session.close()
 
 
-def download_burst_db(save_dir: Path) -> Path:
-    """Download the OPERA burst database.
-    Currently using a version created using opera-adt/burst_db v0.4.0, but hope to switch to ASF-provide source.
-
-    Args:
-        save_dir: Directory to save the database to
-
-    Returns:
-        Path to the downloaded database
-    """
-    db_path = save_dir / 'opera-burst-bbox-only.sqlite3'
-
-    if db_path.exists():
-        return db_path
-
-    url = 'https://ffwilliams2-shenanigans.s3.us-west-2.amazonaws.com/opera/opera-burst-bbox-only.sqlite3'
-    download_file(url, db_path)
-    return db_path
-
-
 def download_s1_granule(granule, save_dir: Path) -> Path:
     out_path = save_dir / f'{granule}.zip'
     if out_path.exists():
