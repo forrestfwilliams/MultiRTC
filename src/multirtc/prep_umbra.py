@@ -10,6 +10,8 @@ from numpy.polynomial.polynomial import polyval
 from sarpy.io.complex.sicd import SICDReader
 from shapely.geometry import Polygon
 
+from multirtc import dem
+
 
 @dataclass
 class UmbraSICD:
@@ -19,15 +21,15 @@ class UmbraSICD:
     starting_range: float
     prf: float
     range_step: float
+    beta0_coeff: np.ndarray
+    orbit: isce3.core.Orbit
     sensing_start: datetime
     sensing_end: datetime
     shape: tuple[int, int]  # (rows, cols)
-    bounding_box: tuple[float, float, float, float]  # (minx, miny, maxx, maxy)
-    bounding_box_epsg: int
-    orbit: isce3.core.Orbit = None
+    footprint: Polygon
 
     @staticmethod
-    def calculate_orbit(sensing_start: datetime, scp_tcoa: int, state_poly):
+    def calculate_orbit(sensing_start: datetime, sensing_end: datetime, scp_tcoa: int, state_poly):
         """Calculate the orbit for a sicd.
         isce3.core.Orbit takes two arguments, a set of orbit state vectors and a reference epoch.
 
@@ -37,25 +39,16 @@ class UmbraSICD:
 
         Spotlight images have a constant azimuth time within a range line, so only one state vector is needed???
         """
-        x_poly = state_poly.X
-        y_poly = state_poly.Y
-        z_poly = state_poly.Z
-        for poly in [x_poly, y_poly, z_poly]:
+        pos, vel = [], []
+        for poly in [state_poly.X, state_poly.Y, state_poly.Z]:
             assert len(poly.Coefs) == poly.order1 + 1, 'Polynomial order does not match number of coefficients'
+            pos.append(polyval(scp_tcoa, poly.Coefs))
+            vel_coeff = np.polyder(poly.Coefs[::-1])[::-1]
+            vel.append(polyval(scp_tcoa, vel_coeff))
 
-        x_pos = polyval(scp_tcoa, x_poly.Coefs)
-        y_pos = polyval(scp_tcoa, y_poly.Coefs)
-        z_pos = polyval(scp_tcoa, z_poly.Coefs)
-
-        x_vel_coeff = np.polyder(x_poly.Coefs[::-1])[::-1]
-        y_vel_coeff = np.polyder(y_poly.Coefs[::-1])[::-1]
-        z_vel_coeff = np.polyder(z_poly.Coefs[::-1])[::-1]
-        x_vel = polyval(scp_tcoa, x_vel_coeff)
-        y_vel = polyval(scp_tcoa, y_vel_coeff)
-        z_vel = polyval(scp_tcoa, z_vel_coeff)
-        
-        sv = isce3.core.StateVector(sensing_start, [x_pos, y_pos, z_pos], [x_vel, y_vel, z_vel])
-        return isce3.core.Orbit([sv], sensing_start - timedelta(minutes=5))
+        sv_start = isce3.core.StateVector(isce3.core.DateTime(sensing_start - timedelta(minutes=1)), pos, vel)
+        sv_end = isce3.core.StateVector(isce3.core.DateTime(sensing_end + timedelta(minutes=1)), pos, vel)
+        return isce3.core.Orbit([sv_start, sv_end], isce3.core.DateTime(sensing_start - timedelta(minutes=5)))
 
     @classmethod
     def from_sarpy_sicd(cls, sicd):
@@ -69,20 +62,21 @@ class UmbraSICD:
         prf = (ipp.IPPEnd - ipp.IPPStart) / (ipp.TEnd - ipp.TStart)  # not sure if this is correct
         range_step = sicd.Grid.Row.SS
         footprint = Polygon([(ic.Lon, ic.Lat) for ic in sicd.GeoData.ImageCorners])
-        breakpoint()
+        scp_tcoa = sicd.Grid.TimeCOAPoly.Coefs[0, 0]
+        orbit = cls.calculate_orbit(sensing_start, sensing_end, scp_tcoa, sicd.Position.ARPPoly)
         umbra_sicd = cls(
             id=sicd.CollectionInfo.CoreName,
             wavelength=wavelength,
             lookside=lookside,
+            starting_range=sicd.SCPCOA.SlantRange,  # Range at scene center, not starting range
             prf=prf,
             range_step=range_step,
+            beta0_coeff=sicd.Radiometric.BetaZeroSFPoly.Coefs,
+            orbit=orbit,
             sensing_start=isce3.core.DateTime(sensing_start),
             sensing_end=isce3.core.DateTime(sensing_end),
-            orbit=cls.calculate_orbit(sensing_start, sicd.Grid.TimeCOAPoly.Coefs[0, 0], sicd.Position.ARPPoly),
             shape=(sicd.ImageData.NumRows, sicd.ImageData.NumCols),
-            starting_range=sicd.SCPCOA.SlantRange,  # Range at scene center, not starting range
-            bounding_box=footprint.bounds,
-            bounding_box_epsg=4326,
+            footprint=footprint,
         )
         return umbra_sicd
 
@@ -99,9 +93,10 @@ def prep_umbra(granule_path: Path, work_dir: Optional[Path] = None) -> Path:
     reader = SICDReader(str(granule_path))
     sicd = reader.get_sicds_as_tuple()[0]
     umbra_sicd = UmbraSICD.from_sarpy_sicd(sicd)
-    breakpoint()
-    # sicd.Timeline.CollectDuration
-    return umbra_sicd, None
+
+    dem_path = work_dir / 'dem.tif'
+    dem.download_opera_dem_for_footprint(dem_path, umbra_sicd.footprint)
+    return umbra_sicd, dem_path
 
 
 def main():
