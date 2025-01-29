@@ -519,11 +519,11 @@ def run_single_job(product_id: str, burst: Sentinel1BurstSlc, geogrid, opts: Rtc
     """
     # Common initializations
     t_start = time.time()
+    output_dir = str(opts.output_dir)
+    os.makedirs(output_dir, exist_ok=True)
 
     raster_format = 'GTiff'
     raster_extension = 'tif'
-    output_dir = str(opts.output_dir)
-    os.makedirs(output_dir, exist_ok=True)
 
     # Filenames
     temp_slc_path = os.path.join(output_dir, 'slc.vrt')
@@ -544,7 +544,7 @@ def run_single_job(product_id: str, burst: Sentinel1BurstSlc, geogrid, opts: Rtc
     dem_raster = isce3.io.Raster(opts.dem_path)
     ellipsoid = isce3.core.Ellipsoid()
     zero_doppler = isce3.core.LUT2d()
-    exponent = 1 if (opts.apply_thermal_noise or opts.ads_rad) else 2
+    exponent = 1 if (opts.apply_thermal_noise or opts.apply_ads_rad) else 2
 
     x_snap = geogrid.spacing_x
     y_snap = geogrid.spacing_y

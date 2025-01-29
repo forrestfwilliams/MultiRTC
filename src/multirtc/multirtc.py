@@ -7,6 +7,7 @@ from multirtc.define_geogrid import generate_geogrids
 from multirtc.prep_burst import prep_burst
 from multirtc.prep_umbra import prep_umbra
 from multirtc.rtc_options import RtcOptions
+from multirtc.umbra_corrections import save_as_beta0
 
 
 def opera_rtc_s1_burst(granule: str, resolution: int = 30, work_dir: Optional[Path] = None) -> None:
@@ -46,6 +47,7 @@ def opera_rtc_umbra_sicd(granule: str, resolution: int = 30, work_dir: Optional[
         raise FileNotFoundError(f'Umbra SICD must be present in input dir {input_dir} for processing.')
     [d.mkdir(parents=True, exist_ok=True) for d in [input_dir, output_dir]]
     umbra_sicd, dem_path = prep_umbra(granule_path, work_dir=input_dir)
+    save_as_beta0(umbra_sicd, output_dir)
 
 
 def main():

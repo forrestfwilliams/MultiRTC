@@ -16,17 +16,26 @@ from multirtc import dem
 @dataclass
 class UmbraSICD:
     id: str
+    file_path: Path
     wavelength: float
     lookside: str  # 'right' or 'left'
     starting_range: float
     prf: float
-    range_step: float
+    range_step: float  # meters
+    azimuth_step: float  # meters
     beta0_coeff: np.ndarray
     orbit: isce3.core.Orbit
     sensing_start: datetime
     sensing_end: datetime
     shape: tuple[int, int]  # (rows, cols)
+    scp_index: tuple[int, int]  # (rows, cols)
     footprint: Polygon
+
+    def load_data(self):
+        """Load data from the UMBRA SICD file."""
+        reader = SICDReader(str(self.file_path))
+        data = reader[:, :]
+        return data
 
     @staticmethod
     def calculate_orbit(sensing_start: datetime, sensing_end: datetime, scp_tcoa: int, state_poly):
@@ -51,7 +60,7 @@ class UmbraSICD:
         return isce3.core.Orbit([sv_start, sv_end], isce3.core.DateTime(sensing_start - timedelta(minutes=5)))
 
     @classmethod
-    def from_sarpy_sicd(cls, sicd):
+    def from_sarpy_sicd(cls, sicd, file_path):
         center_frequency = sicd.RadarCollection.TxFrequency.Min + sicd.RadarCollection.TxFrequency.Max / 2
         wavelength = isce3.core.speed_of_light / center_frequency
         lookside = isce3.core.LookSide.Right if sicd.SCPCOA.SideOfTrack == 'R' else isce3.core.LookSide.Left
@@ -61,21 +70,25 @@ class UmbraSICD:
         ipp = list(sicd.Timeline.IPP)[0]
         prf = (ipp.IPPEnd - ipp.IPPStart) / (ipp.TEnd - ipp.TStart)  # not sure if this is correct
         range_step = sicd.Grid.Row.SS
+        azimuth_step = sicd.Grid.Col.SS
         footprint = Polygon([(ic.Lon, ic.Lat) for ic in sicd.GeoData.ImageCorners])
         scp_tcoa = sicd.Grid.TimeCOAPoly.Coefs[0, 0]
         orbit = cls.calculate_orbit(sensing_start, sensing_end, scp_tcoa, sicd.Position.ARPPoly)
         umbra_sicd = cls(
             id=sicd.CollectionInfo.CoreName,
+            file_path=file_path,
             wavelength=wavelength,
             lookside=lookside,
             starting_range=sicd.SCPCOA.SlantRange,  # Range at scene center, not starting range
             prf=prf,
             range_step=range_step,
+            azimuth_step=azimuth_step,
             beta0_coeff=sicd.Radiometric.BetaZeroSFPoly.Coefs,
             orbit=orbit,
             sensing_start=isce3.core.DateTime(sensing_start),
             sensing_end=isce3.core.DateTime(sensing_end),
             shape=(sicd.ImageData.NumRows, sicd.ImageData.NumCols),
+            scp_index=(sicd.ImageData.SCPPixel.Row, sicd.ImageData.SCPPixel.Col),
             footprint=footprint,
         )
         return umbra_sicd
@@ -92,7 +105,7 @@ def prep_umbra(granule_path: Path, work_dir: Optional[Path] = None) -> Path:
         work_dir = Path.cwd()
     reader = SICDReader(str(granule_path))
     sicd = reader.get_sicds_as_tuple()[0]
-    umbra_sicd = UmbraSICD.from_sarpy_sicd(sicd)
+    umbra_sicd = UmbraSICD.from_sarpy_sicd(sicd, granule_path)
 
     dem_path = work_dir / 'dem.tif'
     dem.download_opera_dem_for_footprint(dem_path, umbra_sicd.footprint)
