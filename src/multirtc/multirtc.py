@@ -51,10 +51,10 @@ def opera_rtc_umbra_sicd(granule: str, resolution: int = 30, work_dir: Optional[
 
 
 def main():
-    """Create an OPERA RTC for an SLC granule
+    """Create an OPERA RTC for an Umbra SICD SLC granule
 
     Example command:
-    multirtc S1_245714_IW1_20240809T141633_VV_6B31-BURST --resolution 40
+    multirtc umbra_image.ntif --resolution 40
     """
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('granule', help='Data granule to create an RTC for.')
