@@ -5,7 +5,7 @@ import earthaccess
 import numpy as np
 import shapely
 from osgeo import gdal
-from shapely.geometry import LinearRing, Polygon
+from shapely.geometry import LinearRing, Polygon, box
 
 
 gdal.UseExceptions()
@@ -69,11 +69,12 @@ def get_latlon_pairs(polygon: Polygon) -> list:
     return list(product(lats, lons))
 
 
-def download_opera_dem_for_footprint(output_path, footprint):
+def download_opera_dem_for_footprint(output_path, footprint, buffer=0.1):
+    output_dir = output_path.parent
     if output_path.exists():
         return output_path
-
-    output_dir = output_path.parent
+    
+    footprint = box(*footprint.buffer(buffer).bounds)
     footprints = check_antimeridean(footprint)
     latlon_pairs = []
     for footprint in footprints:
@@ -86,7 +87,8 @@ def download_opera_dem_for_footprint(output_path, footprint):
     input_files = [str(output_dir / Path(url).name) for url in urls]
     gdal.BuildVRT(str(output_dir / 'dem.vrt'), input_files)
     ds = gdal.Open(str(vrt_filepath), gdal.GA_ReadOnly)
-    gdal.Translate(str(output_path), ds, format='GTiff')
+    gdal_bbox = [footprint.bounds[i] for i in [0, 3, 2, 1]]
+    gdal.Translate(str(output_path), ds, projWin=gdal_bbox, format='GTiff')
 
     ds = None
     [Path(f).unlink() for f in input_files + [vrt_filepath]]

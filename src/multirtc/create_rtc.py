@@ -31,7 +31,7 @@ def compute_layover_shadow_mask(
     radar_grid: isce3.product.RadarGridParameters,
     orbit: isce3.core.Orbit,
     geogrid_in: isce3.product.GeoGridParameters,
-    burst: Sentinel1BurstSlc,
+    slc_obj: Sentinel1BurstSlc,
     dem_raster: isce3.io.Raster,
     filename_out: str,
     output_raster_format: str,
@@ -96,7 +96,7 @@ def compute_layover_shadow_mask(
     """
 
     # determine the output filename
-    str_datetime = burst.sensing_start.strftime('%Y%m%d_%H%M%S.%f')
+    str_datetime = slc_obj.sensing_start.strftime('%Y%m%d_%H%M%S.%f')
 
     # Run topo to get layover/shadow mask
     ellipsoid = isce3.core.Ellipsoid()
@@ -122,7 +122,7 @@ def compute_layover_shadow_mask(
             path_layover_shadow_mask_file, radar_grid.width, radar_grid.length, 1, gdal.GDT_Byte, 'GTiff'
         )
     else:
-        path_layover_shadow_mask = f'layover_shadow_mask_{burst.burst_id}_{burst.polarization}_{str_datetime}'
+        path_layover_shadow_mask = f'layover_shadow_mask_{str_datetime}'
         slantrange_layover_shadow_mask_raster = isce3.io.Raster(
             path_layover_shadow_mask, radar_grid.width, radar_grid.length, 1, gdal.GDT_Byte, 'MEM'
         )
@@ -352,8 +352,6 @@ def run_single_job(product_id: str, burst: Sentinel1BurstSlc, geogrid, opts: Rtc
     rtc_anf_gamma0_to_sigma0_file = (
         f'{output_dir}/{product_id}_{LAYER_NAME_RTC_ANF_GAMMA0_TO_SIGMA0}.{raster_extension}'
     )
-
-    logger.info('    reading burst SLCs')
     radar_grid = burst.as_isce3_radargrid()
     orbit = burst.orbit
     wavelength = burst.wavelength
@@ -556,5 +554,65 @@ def run_single_job(product_id: str, burst: Sentinel1BurstSlc, geogrid, opts: Rtc
     logger.info(f'elapsed time: {t_end - t_start}')
 
 
-def umbra_rtc(umbra_sicd, dem_path, rtc_options):
-    save_as_beta0(umbra_sicd, Path(rtc_options.output_dir))
+def umbra_rtc(umbra_sicd, geogrid, opts):
+    # Common initializations
+    t_start = time.time()
+    output_dir = str(opts.output_dir)
+    product_id = umbra_sicd.id
+    os.makedirs(output_dir, exist_ok=True)
+
+    raster_format = 'GTiff'
+    raster_extension = 'tif'
+
+    # Filenames
+    geo_burst_filename = f'{output_dir}/{product_id}.{raster_extension}'
+    nlooks_file = f'{output_dir}/{product_id}_{LAYER_NAME_NUMBER_OF_LOOKS}.{raster_extension}'
+    rtc_anf_file = f'{output_dir}/{product_id}_{opts.layer_name_rtc_anf}.{raster_extension}'
+    rtc_anf_gamma0_to_sigma0_file = (
+        f'{output_dir}/{product_id}_{LAYER_NAME_RTC_ANF_GAMMA0_TO_SIGMA0}.{raster_extension}'
+    )
+    radar_grid = umbra_sicd.as_isce3_radargrid()
+    orbit = umbra_sicd.orbit
+    wavelength = umbra_sicd.wavelength
+    lookside = radar_grid.lookside
+
+    dem_raster = isce3.io.Raster(opts.dem_path)
+    ellipsoid = isce3.core.Ellipsoid()
+    zero_doppler = isce3.core.LUT2d()
+    exponent = 2
+
+    x_snap = geogrid.spacing_x
+    y_snap = geogrid.spacing_y
+    geogrid.start_x = np.floor(float(geogrid.start_x) / x_snap) * x_snap
+    geogrid.start_y = np.ceil(float(geogrid.start_y) / y_snap) * y_snap
+
+    input_filename = save_as_beta0(umbra_sicd, Path(opts.output_dir))
+    input_filename = str(input_filename)
+
+    # geocoding optional arguments
+    geocode_kwargs = {}
+    layover_shadow_mask_geocode_kwargs = {}
+
+    layover_shadow_mask_file = f'{output_dir}/{product_id}_{LAYER_NAME_LAYOVER_SHADOW_MASK}.{raster_extension}'
+    logger.info(f'    computing layover shadow mask for {product_id}')
+    radar_grid_layover_shadow_mask = radar_grid
+    slantrange_layover_shadow_mask_raster = compute_layover_shadow_mask(
+        radar_grid_layover_shadow_mask,
+        orbit,
+        geogrid,
+        umbra_sicd,
+        dem_raster,
+        layover_shadow_mask_file,
+        raster_format,
+        output_dir,
+        shadow_dilation_size=opts.shadow_dilation_size,
+        threshold_rdr2geo=opts.rdr2geo_threshold,
+        numiter_rdr2geo=opts.rdr2geo_numiter,
+        threshold_geo2rdr=opts.geo2rdr_threshold,
+        numiter_geo2rdr=opts.geo2rdr_numiter,
+        memory_mode=opts.memory_mode_isce3,
+        geocode_options=layover_shadow_mask_geocode_kwargs,
+    )
+    logger.info(f'file saved: {layover_shadow_mask_file}')
+    if opts.apply_shadow_masking:
+        geocode_kwargs['input_layover_shadow_mask_raster'] = slantrange_layover_shadow_mask_raster

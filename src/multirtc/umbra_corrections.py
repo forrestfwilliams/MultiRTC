@@ -19,6 +19,10 @@ def get_xrow_ycol(umbra_sicd: UmbraSICD) -> np.ndarray:
 
 def save_as_beta0(umbra_sicd: UmbraSICD, output_dir) -> np.ndarray:
     """Save Umbra SICD as a beta0 geotiff file."""
+    output_path = output_dir / f'{umbra_sicd.id}_beta0.tif'
+    if output_path.exists():
+        return output_path
+
     data_base = umbra_sicd.load_data()
     data_power = data_base.real**2 + data_base.imag**2
 
@@ -27,7 +31,6 @@ def save_as_beta0(umbra_sicd: UmbraSICD, output_dir) -> np.ndarray:
 
     data_beta0 = data_power * beta0_scale_factor
 
-    output_path = output_dir / f'{umbra_sicd.id}_beta0.tif'
     driver = gdal.GetDriverByName('GTiff')
     length, width = data_power.shape
     out_ds = driver.Create(str(output_path), width, length, 1, gdal.GDT_Float32)
