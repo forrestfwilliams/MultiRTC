@@ -74,7 +74,6 @@ def download_opera_dem_for_footprint(output_path, footprint, buffer=0.1):
     if output_path.exists():
         return output_path
     
-    footprint = box(*footprint.buffer(buffer).bounds)
     footprints = check_antimeridean(footprint)
     latlon_pairs = []
     for footprint in footprints:
@@ -87,8 +86,7 @@ def download_opera_dem_for_footprint(output_path, footprint, buffer=0.1):
     input_files = [str(output_dir / Path(url).name) for url in urls]
     gdal.BuildVRT(str(output_dir / 'dem.vrt'), input_files)
     ds = gdal.Open(str(vrt_filepath), gdal.GA_ReadOnly)
-    gdal_bbox = [footprint.bounds[i] for i in [0, 3, 2, 1]]
-    gdal.Translate(str(output_path), ds, projWin=gdal_bbox, format='GTiff')
+    gdal.Translate(str(output_path), ds, format='GTiff')
 
     ds = None
     [Path(f).unlink() for f in input_files + [vrt_filepath]]
