@@ -1,6 +1,7 @@
 import logging
 import os
 import time
+from pathlib import Path
 
 import isce3
 import numpy as np
@@ -10,6 +11,7 @@ from scipy import ndimage
 
 from multirtc.rtc_options import RtcOptions
 from multirtc.s1burst_corrections import apply_slc_corrections, compute_correction_lut
+from multirtc.umbra_corrections import save_as_beta0
 
 
 logger = logging.getLogger('rtc_s1')
@@ -552,3 +554,7 @@ def run_single_job(product_id: str, burst: Sentinel1BurstSlc, geogrid, opts: Rtc
 
     t_end = time.time()
     logger.info(f'elapsed time: {t_end - t_start}')
+
+
+def umbra_rtc(umbra_sicd, dem_path, rtc_options):
+    save_as_beta0(umbra_sicd, Path(rtc_options.output_dir))

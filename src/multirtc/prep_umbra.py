@@ -14,6 +14,12 @@ from multirtc import dem
 
 
 @dataclass
+class Point:
+    x: float
+    y: float
+
+
+@dataclass
 class UmbraSICD:
     id: str
     file_path: Path
@@ -30,6 +36,7 @@ class UmbraSICD:
     shape: tuple[int, int]  # (rows, cols)
     scp_index: tuple[int, int]  # (rows, cols)
     footprint: Polygon
+    center: Point
 
     def load_data(self):
         """Load data from the UMBRA SICD file."""
@@ -85,13 +92,31 @@ class UmbraSICD:
             azimuth_step=azimuth_step,
             beta0_coeff=sicd.Radiometric.BetaZeroSFPoly.Coefs,
             orbit=orbit,
-            sensing_start=isce3.core.DateTime(sensing_start),
-            sensing_end=isce3.core.DateTime(sensing_end),
+            sensing_start=sensing_start,
+            sensing_end=sensing_end,
             shape=(sicd.ImageData.NumRows, sicd.ImageData.NumCols),
             scp_index=(sicd.ImageData.SCPPixel.Row, sicd.ImageData.SCPPixel.Col),
             footprint=footprint,
+            center=Point(sicd.GeoData.SCP.LLH.Lon, sicd.GeoData.SCP.LLH.Lat),
         )
         return umbra_sicd
+
+    def as_isce3_radargrid(self):
+        time_delta = timedelta(minutes=5)
+        ref_epoch = isce3.core.DateTime(self.sensing_start - time_delta)
+        sensing_start = time_delta.total_seconds()
+        radar_grid = isce3.product.RadarGridParameters(
+            sensing_start,
+            self.wavelength,
+            self.prf,
+            self.starting_range,
+            self.range_step,
+            self.lookside,
+            self.shape[0],
+            self.shape[1],
+            ref_epoch,
+        )
+        return radar_grid
 
 
 def prep_umbra(granule_path: Path, work_dir: Optional[Path] = None) -> Path:
