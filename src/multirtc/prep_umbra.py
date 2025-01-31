@@ -6,11 +6,16 @@ from typing import Optional
 
 import isce3
 import numpy as np
-from numpy.polynomial.polynomial import polyval
+
+# from numpy.polynomial.polynomial import polyval
 from sarpy.io.complex.sicd import SICDReader
 from shapely.geometry import Polygon
 
 from multirtc import dem
+
+
+def check_poly_order(poly):
+    assert len(poly.Coefs) == poly.order1 + 1, 'Polynomial order does not match number of coefficients'
 
 
 @dataclass
@@ -31,8 +36,10 @@ class UmbraSICD:
     azimuth_step: float  # meters
     beta0_coeff: np.ndarray
     orbit: isce3.core.Orbit
+    reference_epoch: datetime
     sensing_start: datetime
-    sensing_end: datetime
+    sensing_start_sec: float
+    sensing_end_sec: float
     shape: tuple[int, int]  # (rows, cols)
     scp_index: tuple[int, int]  # (rows, cols)
     footprint: Polygon
@@ -45,7 +52,9 @@ class UmbraSICD:
         return data
 
     @staticmethod
-    def calculate_orbit(sensing_start: datetime, sensing_end: datetime, scp_tcoa: int, state_poly):
+    def calculate_orbit(
+        sensing_period_start: datetime, sensing_start: float, scp_tcoa: float, sensing_end: float, state_poly
+    ):
         """Calculate the orbit for a sicd.
         isce3.core.Orbit takes two arguments, a set of orbit state vectors and a reference epoch.
 
@@ -55,16 +64,35 @@ class UmbraSICD:
 
         Spotlight images have a constant azimuth time within a range line, so only one state vector is needed???
         """
-        pos, vel = [], []
+        pos_scp, vel_scp = [], []
         for poly in [state_poly.X, state_poly.Y, state_poly.Z]:
-            assert len(poly.Coefs) == poly.order1 + 1, 'Polynomial order does not match number of coefficients'
-            pos.append(polyval(scp_tcoa, poly.Coefs))
-            vel_coeff = np.polyder(poly.Coefs[::-1])[::-1]
-            vel.append(polyval(scp_tcoa, vel_coeff))
+            check_poly_order(poly)
+            pos_scp.append(np.polyval(poly.Coefs[::-1], scp_tcoa))
+            vel_coeff = np.polyder(poly.Coefs[::-1])
+            vel_scp.append(np.polyval(vel_coeff, scp_tcoa))
 
-        sv_start = isce3.core.StateVector(isce3.core.DateTime(sensing_start - timedelta(minutes=1)), pos, vel)
-        sv_end = isce3.core.StateVector(isce3.core.DateTime(sensing_end + timedelta(minutes=1)), pos, vel)
-        return isce3.core.Orbit([sv_start, sv_end], isce3.core.DateTime(sensing_start - timedelta(minutes=5)))
+        # Umbra only gives us one state vector, so assume a constant velocity to get the rest of the local orbit
+        total_time = sensing_end - sensing_start
+        half_time = total_time // 2
+        times_relative = np.arange(-half_time, half_time, 1)
+        times = times_relative + scp_tcoa
+        svs = []
+        for time in times:
+            pos = list(np.array(pos_scp) + (np.array(vel_scp) * time))
+            sv_time = isce3.core.DateTime(sensing_period_start + timedelta(seconds=time))
+            svs.append(isce3.core.StateVector(sv_time, pos, vel_scp))
+
+        orbit = isce3.core.Orbit(svs, isce3.core.DateTime(sensing_period_start))
+        return orbit
+
+    @staticmethod
+    def calculate_instantaneous_prf(time: float, ipp):
+        if not ipp.TStart <= time <= ipp.TEnd:
+            raise ValueError('Time must be within the IPP')
+        check_poly_order(ipp.IPPPoly)
+        prf_coeff = np.polyder(ipp.IPPPoly.Coefs[::-1])
+        prf = np.polyval(prf_coeff, time)
+        return prf
 
     @classmethod
     def from_sarpy_sicd(cls, sicd, file_path):
@@ -72,15 +100,19 @@ class UmbraSICD:
         wavelength = isce3.core.speed_of_light / center_frequency
         lookside = isce3.core.LookSide.Right if sicd.SCPCOA.SideOfTrack == 'R' else isce3.core.LookSide.Left
         sensing_period_start = sicd.Timeline.CollectStart.astype('M8[ms]').astype('O')
-        sensing_start = sensing_period_start + timedelta(sicd.ImageFormation.TStartProc)
-        sensing_end = sensing_period_start + timedelta(sicd.ImageFormation.TEndProc)
-        ipp = list(sicd.Timeline.IPP)[0]
-        prf = (ipp.IPPEnd - ipp.IPPStart) / (ipp.TEnd - ipp.TStart)  # not sure if this is correct
         range_step = sicd.Grid.Row.SS
         azimuth_step = sicd.Grid.Col.SS
         footprint = Polygon([(ic.Lon, ic.Lat) for ic in sicd.GeoData.ImageCorners])
         scp_tcoa = sicd.Grid.TimeCOAPoly.Coefs[0, 0]
-        orbit = cls.calculate_orbit(sensing_start, sensing_end, scp_tcoa, sicd.Position.ARPPoly)
+        ipp = list(sicd.Timeline.IPP)[0]
+        prf = cls.calculate_instantaneous_prf(scp_tcoa, ipp)
+        orbit = cls.calculate_orbit(
+            sensing_period_start,
+            sicd.ImageFormation.TStartProc,
+            scp_tcoa,
+            sicd.ImageFormation.TEndProc,
+            sicd.Position.ARPPoly,
+        )
         umbra_sicd = cls(
             id=sicd.CollectionInfo.CoreName,
             file_path=file_path,
@@ -88,12 +120,15 @@ class UmbraSICD:
             lookside=lookside,
             starting_range=sicd.SCPCOA.SlantRange,  # Range at scene center, not starting range
             prf=prf,
+            # prf=486.0,
             range_step=range_step,
             azimuth_step=azimuth_step,
             beta0_coeff=sicd.Radiometric.BetaZeroSFPoly.Coefs,
             orbit=orbit,
-            sensing_start=sensing_start,
-            sensing_end=sensing_end,
+            reference_epoch=sensing_period_start,
+            sensing_start=sensing_period_start + timedelta(seconds=sicd.ImageFormation.TStartProc),
+            sensing_start_sec=sicd.ImageFormation.TStartProc,
+            sensing_end_sec=sicd.ImageFormation.TEndProc,
             shape=(sicd.ImageData.NumRows, sicd.ImageData.NumCols),
             scp_index=(sicd.ImageData.SCPPixel.Row, sicd.ImageData.SCPPixel.Col),
             footprint=footprint,
@@ -102,20 +137,21 @@ class UmbraSICD:
         return umbra_sicd
 
     def as_isce3_radargrid(self):
-        time_delta = timedelta(minutes=5)
-        ref_epoch = isce3.core.DateTime(self.sensing_start - time_delta)
-        sensing_start = time_delta.total_seconds()
         radar_grid = isce3.product.RadarGridParameters(
-            sensing_start,
-            self.wavelength,
-            self.prf,
-            self.starting_range,
-            self.range_step,
-            self.lookside,
-            self.shape[0],
-            self.shape[1],
-            ref_epoch,
+            sensing_start=self.sensing_start_sec,
+            wavelength=self.wavelength,
+            lookside=self.lookside,
+            length=self.shape[0],
+            width=self.shape[1],
+            ref_epoch=isce3.core.DateTime(self.reference_epoch),
+            range_pixel_spacing=self.range_step,
+            starting_range=self.starting_range,
+            prf=self.prf,
+            # range_pixel_spacing=2.3,
+            # prf=486,
+            # starting_range=974673,
         )
+        assert radar_grid.ref_epoch == self.orbit.reference_epoch
         return radar_grid
 
 
