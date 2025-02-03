@@ -131,6 +131,7 @@ class UmbraSICD:
             footprint=footprint,
             center=Point(sicd.GeoData.SCP.LLH.Lon, sicd.GeoData.SCP.LLH.Lat),
         )
+        breakpoint()
         return umbra_sicd
 
     def as_isce3_radargrid(self):
