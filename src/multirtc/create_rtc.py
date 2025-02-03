@@ -94,18 +94,13 @@ def compute_layover_shadow_mask(
     slantrange_layover_shadow_mask_raster: isce3.io.Raster
         Layover/shadow-mask ISCE3 raster object in radar coordinates
     """
-
     # determine the output filename
     str_datetime = slc_obj.sensing_start.strftime('%Y%m%d_%H%M%S.%f')
 
     # Run topo to get layover/shadow mask
     ellipsoid = isce3.core.Ellipsoid()
-
-    Rdr2Geo = isce3.geometry.Rdr2Geo
-
     grid_doppler = isce3.core.LUT2d()
-
-    rdr2geo_obj = Rdr2Geo(
+    rdr2geo_obj = isce3.geometry.Rdr2Geo(
         radar_grid,
         orbit,
         ellipsoid,
@@ -113,7 +108,8 @@ def compute_layover_shadow_mask(
         threshold=threshold_rdr2geo,
         numiter=numiter_rdr2geo,
         extraiter=extraiter_rdr2geo,
-        lines_per_block=lines_per_block_rdr2geo,
+        # lines_per_block=lines_per_block_rdr2geo,
+        lines_per_block=6000,
     )
 
     if shadow_dilation_size > 0:
@@ -556,7 +552,7 @@ def run_single_job(product_id: str, burst: Sentinel1BurstSlc, geogrid, opts: Rtc
 
 def umbra_rtc(umbra_sicd, geogrid, opts):
     # Common initializations
-    t_start = time.time()
+    # t_start = time.time()
     output_dir = str(opts.output_dir)
     product_id = umbra_sicd.id
     os.makedirs(output_dir, exist_ok=True)
@@ -565,21 +561,21 @@ def umbra_rtc(umbra_sicd, geogrid, opts):
     raster_extension = 'tif'
 
     # Filenames
-    geo_burst_filename = f'{output_dir}/{product_id}.{raster_extension}'
-    nlooks_file = f'{output_dir}/{product_id}_{LAYER_NAME_NUMBER_OF_LOOKS}.{raster_extension}'
-    rtc_anf_file = f'{output_dir}/{product_id}_{opts.layer_name_rtc_anf}.{raster_extension}'
-    rtc_anf_gamma0_to_sigma0_file = (
-        f'{output_dir}/{product_id}_{LAYER_NAME_RTC_ANF_GAMMA0_TO_SIGMA0}.{raster_extension}'
-    )
+    # geo_burst_filename = f'{output_dir}/{product_id}.{raster_extension}'
+    # nlooks_file = f'{output_dir}/{product_id}_{LAYER_NAME_NUMBER_OF_LOOKS}.{raster_extension}'
+    # rtc_anf_file = f'{output_dir}/{product_id}_{opts.layer_name_rtc_anf}.{raster_extension}'
+    # rtc_anf_gamma0_to_sigma0_file = (
+    #     f'{output_dir}/{product_id}_{LAYER_NAME_RTC_ANF_GAMMA0_TO_SIGMA0}.{raster_extension}'
+    # )
     radar_grid = umbra_sicd.as_isce3_radargrid()
     orbit = umbra_sicd.orbit
-    wavelength = umbra_sicd.wavelength
-    lookside = radar_grid.lookside
+    # wavelength = umbra_sicd.wavelength
+    # lookside = radar_grid.lookside
 
     dem_raster = isce3.io.Raster(opts.dem_path)
-    ellipsoid = isce3.core.Ellipsoid()
-    zero_doppler = isce3.core.LUT2d()
-    exponent = 2
+    # ellipsoid = isce3.core.Ellipsoid()
+    # zero_doppler = isce3.core.LUT2d()
+    # exponent = 2
 
     x_snap = geogrid.spacing_x
     y_snap = geogrid.spacing_y

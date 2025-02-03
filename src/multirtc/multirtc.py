@@ -2,6 +2,8 @@ import argparse
 from pathlib import Path
 from typing import Optional
 
+# import isce3
+# from shapely import from_wkt
 from multirtc.create_rtc import run_single_job, umbra_rtc
 from multirtc.define_geogrid import generate_geogrids
 from multirtc.prep_burst import prep_burst
@@ -46,6 +48,14 @@ def opera_rtc_umbra_sicd(granule: str, resolution: int = 30, work_dir: Optional[
         raise FileNotFoundError(f'Umbra SICD must be present in input dir {input_dir} for processing.')
     [d.mkdir(parents=True, exist_ok=True) for d in [input_dir, output_dir]]
     umbra_sicd, dem_path = prep_umbra(granule_path, work_dir=input_dir)
+    # import isce3
+    # from shapely import from_wkt
+    # radar_grid = umbra_sicd.as_isce3_radargrid()
+    # dem = isce3.geometry.DEMInterpolator(7000.0)
+    # doppler = isce3.core.LUT2d()
+    # wkt = isce3.geometry.get_geo_perimeter_wkt(radar_grid, umbra_sicd.orbit, doppler, dem, 3)
+    # polygon = from_wkt(wkt)
+    # breakpoint()
     opts = RtcOptions(dem_path=str(dem_path), output_dir=str(output_dir), resolution=resolution)
     geogrid = generate_geogrids(umbra_sicd, opts.resolution)
     umbra_rtc(umbra_sicd, geogrid, opts)

@@ -64,6 +64,7 @@ class UmbraSICD:
 
         Spotlight images have a constant azimuth time within a range line, so only one state vector is needed???
         """
+        # FIXME: Use the sicd.SCPCOA instead
         pos_scp, vel_scp = [], []
         for poly in [state_poly.X, state_poly.Y, state_poly.Z]:
             check_poly_order(poly)
@@ -86,6 +87,31 @@ class UmbraSICD:
         return orbit
 
     @staticmethod
+    def calculate_orbit_v2(scp_coa, sensing_period_start):
+        time = np.arange(-10, 11, 1)
+
+        x_vel = scp_coa.ARPVel.X + scp_coa.ARPAcc.X * time
+        x_pos = scp_coa.ARPPos.X + scp_coa.ARPVel.X * time + 0.5 * scp_coa.ARPAcc.X * time**2
+
+        y_vel = scp_coa.ARPVel.Y + scp_coa.ARPAcc.Y * time
+        y_pos = scp_coa.ARPPos.Y + scp_coa.ARPVel.Y * time + 0.5 * scp_coa.ARPAcc.Y * time**2
+
+        z_vel = scp_coa.ARPVel.Z + scp_coa.ARPAcc.Z * time
+        z_pos = scp_coa.ARPPos.Z + scp_coa.ARPVel.Z * time + 0.5 * scp_coa.ARPAcc.Z * time**2
+
+        time_sensing_period = time + scp_coa.SCPTime
+
+        svs = []
+        for i in range(len(time)):
+            sv_time = isce3.core.DateTime(sensing_period_start + timedelta(seconds=time_sensing_period[i]))
+            sv = isce3.core.StateVector(sv_time, [x_pos[i], y_pos[i], z_pos[i]], [x_vel[i], y_vel[i], z_vel[i]])
+            svs.append(sv)
+
+        orbit = isce3.core.Orbit(svs, isce3.core.DateTime(sensing_period_start))
+        orbit.set_interp_method('Legendre')
+        return orbit
+
+    @staticmethod
     def calculate_instantaneous_prf(time: float, ipp):
         if not ipp.TStart <= time <= ipp.TEnd:
             raise ValueError('Time must be within the IPP')
@@ -93,6 +119,18 @@ class UmbraSICD:
         prf_coeff = np.polyder(ipp.IPPPoly.Coefs[::-1])
         prf = np.polyval(prf_coeff, time)
         return prf
+
+    @staticmethod
+    def calculate_starting_range(sicd):
+        scp_range = sicd.SCPCOA.SlantRange
+        grazing_angle = np.deg2rad(sicd.SCPCOA.GrazeAng) # TODO: is this for slant range?
+        starting_range_to_scene_center = sicd.Grid.Col.SS * sicd.ImageData.SCPPixel.Col
+        starting_range = np.sqrt(
+            scp_range**2
+            + starting_range_to_scene_center**2
+            - (2 * scp_range * starting_range_to_scene_center * np.cos(grazing_angle))
+        )
+        return starting_range
 
     @classmethod
     def from_sarpy_sicd(cls, sicd, file_path):
@@ -103,24 +141,18 @@ class UmbraSICD:
         range_step = sicd.Grid.Row.SS
         azimuth_step = sicd.Grid.Col.SS
         footprint = Polygon([(ic.Lon, ic.Lat) for ic in sicd.GeoData.ImageCorners])
-        scp_tcoa = sicd.Grid.TimeCOAPoly.Coefs[0, 0]
+        scp_coa = sicd.SCPCOA
         ipp = list(sicd.Timeline.IPP)[0]
-        prf = cls.calculate_instantaneous_prf(scp_tcoa, ipp)
-        orbit = cls.calculate_orbit(
-            sensing_period_start,
-            sicd.ImageFormation.TStartProc,
-            scp_tcoa,
-            sicd.ImageFormation.TEndProc,
-            sicd.Position.ARPPoly,
-        )
+        prf = cls.calculate_instantaneous_prf(scp_coa.SCPTime, ipp)
+        orbit = cls.calculate_orbit_v2(scp_coa, sensing_period_start)
+        starting_range = cls.calculate_starting_range(sicd)
         umbra_sicd = cls(
             id=sicd.CollectionInfo.CoreName,
             file_path=file_path,
             wavelength=wavelength,
             lookside=lookside,
-            starting_range=sicd.SCPCOA.SlantRange,  # Range at scene center, not starting range
+            starting_range=starting_range,
             prf=prf,
-            # prf=486.0,
             range_step=range_step,
             azimuth_step=azimuth_step,
             beta0_coeff=sicd.Radiometric.BetaZeroSFPoly.Coefs,
@@ -147,9 +179,6 @@ class UmbraSICD:
             range_pixel_spacing=self.range_step,
             starting_range=self.starting_range,
             prf=self.prf,
-            # range_pixel_spacing=2.3,
-            # prf=486,
-            # starting_range=974673,
         )
         assert radar_grid.ref_epoch == self.orbit.reference_epoch
         return radar_grid
