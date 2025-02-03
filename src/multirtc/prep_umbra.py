@@ -52,41 +52,6 @@ class UmbraSICD:
         return data
 
     @staticmethod
-    def calculate_orbit(
-        sensing_period_start: datetime, sensing_start: float, scp_tcoa: float, sensing_end: float, state_poly
-    ):
-        """Calculate the orbit for a sicd.
-        isce3.core.Orbit takes two arguments, a set of orbit state vectors and a reference epoch.
-
-        The reference epoch is starting time - 2 days.
-        State vectors is a list of isce3.core.StateVector objects where each object takes the form:
-        isce3.core.StateVector(isce3_datetime, [x_pos, y_pos, z_pos], [x_vel, y_vel, z_vel])
-
-        Spotlight images have a constant azimuth time within a range line, so only one state vector is needed???
-        """
-        # FIXME: Use the sicd.SCPCOA instead
-        pos_scp, vel_scp = [], []
-        for poly in [state_poly.X, state_poly.Y, state_poly.Z]:
-            check_poly_order(poly)
-            pos_scp.append(np.polyval(poly.Coefs[::-1], scp_tcoa))
-            vel_coeff = np.polyder(poly.Coefs[::-1])
-            vel_scp.append(np.polyval(vel_coeff, scp_tcoa))
-
-        # Umbra only gives us one state vector, so assume a constant velocity to get the rest of the local orbit
-        total_time = sensing_end - sensing_start
-        half_time = total_time // 2
-        times_relative = np.arange(-half_time, half_time, 1)
-        times = times_relative + scp_tcoa
-        svs = []
-        for time in times:
-            pos = list(np.array(pos_scp) + (np.array(vel_scp) * time))
-            sv_time = isce3.core.DateTime(sensing_period_start + timedelta(seconds=time))
-            svs.append(isce3.core.StateVector(sv_time, pos, vel_scp))
-
-        orbit = isce3.core.Orbit(svs, isce3.core.DateTime(sensing_period_start))
-        return orbit
-
-    @staticmethod
     def calculate_orbit_v2(scp_coa, sensing_period_start):
         time = np.arange(-10, 11, 1)
 
