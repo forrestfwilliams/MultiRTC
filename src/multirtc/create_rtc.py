@@ -108,8 +108,7 @@ def compute_layover_shadow_mask(
         threshold=threshold_rdr2geo,
         numiter=numiter_rdr2geo,
         extraiter=extraiter_rdr2geo,
-        # lines_per_block=lines_per_block_rdr2geo,
-        lines_per_block=6000,
+        lines_per_block=lines_per_block_rdr2geo,
     )
 
     if shadow_dilation_size > 0:
@@ -552,7 +551,7 @@ def run_single_job(product_id: str, burst: Sentinel1BurstSlc, geogrid, opts: Rtc
 
 def umbra_rtc(umbra_sicd, geogrid, opts):
     # Common initializations
-    # t_start = time.time()
+    t_start = time.time()
     output_dir = str(opts.output_dir)
     product_id = umbra_sicd.id
     os.makedirs(output_dir, exist_ok=True)
@@ -561,21 +560,21 @@ def umbra_rtc(umbra_sicd, geogrid, opts):
     raster_extension = 'tif'
 
     # Filenames
-    # geo_burst_filename = f'{output_dir}/{product_id}.{raster_extension}'
-    # nlooks_file = f'{output_dir}/{product_id}_{LAYER_NAME_NUMBER_OF_LOOKS}.{raster_extension}'
-    # rtc_anf_file = f'{output_dir}/{product_id}_{opts.layer_name_rtc_anf}.{raster_extension}'
-    # rtc_anf_gamma0_to_sigma0_file = (
-    #     f'{output_dir}/{product_id}_{LAYER_NAME_RTC_ANF_GAMMA0_TO_SIGMA0}.{raster_extension}'
-    # )
+    geo_filename = f'{output_dir}/{product_id}.{raster_extension}'
+    nlooks_file = f'{output_dir}/{product_id}_{LAYER_NAME_NUMBER_OF_LOOKS}.{raster_extension}'
+    rtc_anf_file = f'{output_dir}/{product_id}_{opts.layer_name_rtc_anf}.{raster_extension}'
+    rtc_anf_gamma0_to_sigma0_file = (
+        f'{output_dir}/{product_id}_{LAYER_NAME_RTC_ANF_GAMMA0_TO_SIGMA0}.{raster_extension}'
+    )
     radar_grid = umbra_sicd.as_isce3_radargrid()
     orbit = umbra_sicd.orbit
-    # wavelength = umbra_sicd.wavelength
-    # lookside = radar_grid.lookside
+    wavelength = umbra_sicd.wavelength
+    lookside = radar_grid.lookside
 
     dem_raster = isce3.io.Raster(opts.dem_path)
-    # ellipsoid = isce3.core.Ellipsoid()
-    # zero_doppler = isce3.core.LUT2d()
-    # exponent = 2
+    ellipsoid = isce3.core.Ellipsoid()
+    zero_doppler = isce3.core.LUT2d()
+    exponent = 2
 
     x_snap = geogrid.spacing_x
     y_snap = geogrid.spacing_y
@@ -612,3 +611,106 @@ def umbra_rtc(umbra_sicd, geogrid, opts):
     logger.info(f'file saved: {layover_shadow_mask_file}')
     if opts.apply_shadow_masking:
         geocode_kwargs['input_layover_shadow_mask_raster'] = slantrange_layover_shadow_mask_raster
+
+    out_geo_nlooks_obj = isce3.io.Raster(nlooks_file, geogrid.width, geogrid.length, 1, gdal.GDT_Float32, raster_format)
+    out_geo_rtc_obj = isce3.io.Raster(rtc_anf_file, geogrid.width, geogrid.length, 1, gdal.GDT_Float32, raster_format)
+    out_geo_rtc_gamma0_to_sigma0_obj = isce3.io.Raster(
+        rtc_anf_gamma0_to_sigma0_file, geogrid.width, geogrid.length, 1, gdal.GDT_Float32, raster_format
+    )
+    geocode_kwargs['out_geo_rtc_gamma0_to_sigma0'] = out_geo_rtc_gamma0_to_sigma0_obj
+
+    rdr_raster = isce3.io.Raster(input_filename)
+    # Generate output geocoded burst raster
+    geo_raster = isce3.io.Raster(
+        geo_filename, geogrid.width, geogrid.length, rdr_raster.num_bands, gdal.GDT_Float32, raster_format
+    )
+
+    # init Geocode object depending on raster type
+    if rdr_raster.datatype() == gdal.GDT_Float32:
+        geo_obj = isce3.geocode.GeocodeFloat32()
+    elif rdr_raster.datatype() == gdal.GDT_Float64:
+        geo_obj = isce3.geocode.GeocodeFloat64()
+    elif rdr_raster.datatype() == gdal.GDT_CFloat32:
+        geo_obj = isce3.geocode.GeocodeCFloat32()
+    elif rdr_raster.datatype() == gdal.GDT_CFloat64:
+        geo_obj = isce3.geocode.GeocodeCFloat64()
+    else:
+        err_str = 'Unsupported raster type for geocoding'
+        raise NotImplementedError(err_str)
+
+    # init geocode members
+    geo_obj.orbit = orbit
+    geo_obj.ellipsoid = ellipsoid
+    geo_obj.doppler = zero_doppler
+    geo_obj.threshold_geo2rdr = opts.geo2rdr_threshold
+    geo_obj.numiter_geo2rdr = opts.geo2rdr_numiter
+
+    # set data interpolator based on the geocode algorithm
+    if opts.geocode_algorithm_isce3 == isce3.geocode.GeocodeOutputMode.INTERP:
+        geo_obj.data_interpolator = opts.geocode_algorithm_isce3
+
+    geo_obj.geogrid(
+        geogrid.start_x,
+        geogrid.start_y,
+        geogrid.spacing_x,
+        geogrid.spacing_y,
+        geogrid.width,
+        geogrid.length,
+        geogrid.epsg,
+    )
+
+    geo_obj.geocode(
+        radar_grid=radar_grid,
+        input_raster=rdr_raster,
+        output_raster=geo_raster,
+        dem_raster=dem_raster,
+        output_mode=opts.geocode_algorithm_isce3,
+        geogrid_upsampling=opts.geogrid_upsampling,
+        flag_apply_rtc=opts.apply_rtc,
+        input_terrain_radiometry=opts.input_terrain_radiometry_isce3,
+        output_terrain_radiometry=opts.terrain_radiometry_isce3,
+        exponent=exponent,
+        rtc_min_value_db=opts.rtc_min_value_db,
+        rtc_upsampling=opts.rtc_upsampling,
+        rtc_algorithm=opts.rtc_algorithm_isce3,
+        abs_cal_factor=opts.abs_cal_factor,
+        flag_upsample_radar_grid=opts.upsample_radar_grid,
+        clip_min=opts.clip_min,
+        clip_max=opts.clip_max,
+        out_geo_nlooks=out_geo_nlooks_obj,
+        out_geo_rtc=out_geo_rtc_obj,
+        rtc_area_beta_mode=opts.rtc_area_beta_mode_isce3,
+        # out_geo_rtc_gamma0_to_sigma0=out_geo_rtc_gamma0_to_sigma0_obj,
+        input_rtc=None,
+        output_rtc=None,
+        dem_interp_method=opts.dem_interpolation_method_isce3,
+        memory_mode=opts.memory_mode_isce3,
+        **geocode_kwargs,
+    )
+
+    del geo_raster
+
+    out_geo_nlooks_obj.close_dataset()
+    del out_geo_nlooks_obj
+
+    out_geo_rtc_obj.close_dataset()
+    del out_geo_rtc_obj
+
+    out_geo_rtc_gamma0_to_sigma0_obj.close_dataset()
+    del out_geo_rtc_gamma0_to_sigma0_obj
+
+    radar_grid_file_dict = {}
+    save_intermediate_geocode_files(
+        geogrid,
+        opts.dem_interpolation_method_isce3,
+        product_id,
+        output_dir,
+        raster_extension,
+        dem_raster,
+        radar_grid_file_dict,
+        lookside,
+        wavelength,
+        orbit,
+    )
+    t_end = time.time()
+    logger.info(f'elapsed time: {t_end - t_start}')
