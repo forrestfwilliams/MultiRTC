@@ -22,8 +22,7 @@ def save_as_beta0(umbra_sicd: UmbraSICD, output_dir) -> np.ndarray:
     output_path = output_dir / f'{umbra_sicd.id}_beta0.tif'
     if output_path.exists():
         return output_path
-
-    data_base = umbra_sicd.load_data()
+    data_base = umbra_sicd.load_data().T
     # xrow, ycol = get_xrow_ycol(umbra_sicd)
     # beta0_scale_factor = polyval2d(xrow, ycol, umbra_sicd.beta0_coeff[::-1, ::-1])
     # data_beta0 = data_base * beta0_scale_factor

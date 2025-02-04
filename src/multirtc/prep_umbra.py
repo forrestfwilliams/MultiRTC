@@ -126,12 +126,11 @@ class UmbraSICD:
             sensing_start=sensing_period_start + timedelta(seconds=sicd.ImageFormation.TStartProc),
             sensing_start_sec=sicd.ImageFormation.TStartProc,
             sensing_end_sec=sicd.ImageFormation.TEndProc,
-            shape=(sicd.ImageData.NumRows, sicd.ImageData.NumCols),
+            shape=(sicd.ImageData.NumCols, sicd.ImageData.NumRows),
             scp_index=(sicd.ImageData.SCPPixel.Row, sicd.ImageData.SCPPixel.Col),
             footprint=footprint,
             center=Point(sicd.GeoData.SCP.LLH.Lon, sicd.GeoData.SCP.LLH.Lat),
         )
-        breakpoint()
         return umbra_sicd
 
     def as_isce3_radargrid(self):
