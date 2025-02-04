@@ -40,15 +40,6 @@ class RtcOptions:
     resolution: int = 30
 
     def __post_init__(self):
-        if not self.apply_rtc:
-            if self.save_rtc_anf:
-                raise ValueError('RTC ANF flags are only available with RTC enabled')
-            if self.save_rtc_anf_gamma0_to_sigma0:
-                raise ValueError('RTC ANF gamma0 to sigma0 flags are only available with RTC enabled')
-
-        if self.terrain_radiometry == 'sigma0' and self.save_rtc_anf_gamma0_to_sigma0:
-            raise ValueError('RTC ANF gamma0 to sigma0 flags are only available with output type set to gamma0')
-
         if self.apply_rtc:
             self.layer_name_rtc_anf = f'rtc_anf_{self.terrain_radiometry}_to_{self.input_terrain_radiometry}'
         else:

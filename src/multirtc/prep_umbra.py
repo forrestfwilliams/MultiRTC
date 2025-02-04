@@ -127,7 +127,7 @@ class UmbraSICD:
             sensing_start_sec=sicd.ImageFormation.TStartProc,
             sensing_end_sec=sicd.ImageFormation.TEndProc,
             shape=(sicd.ImageData.NumCols, sicd.ImageData.NumRows),
-            scp_index=(sicd.ImageData.SCPPixel.Row, sicd.ImageData.SCPPixel.Col),
+            scp_index=(sicd.ImageData.SCPPixel.Col, sicd.ImageData.SCPPixel.Row), # backwards for shadows-down
             footprint=footprint,
             center=Point(sicd.GeoData.SCP.LLH.Lon, sicd.GeoData.SCP.LLH.Lat),
         )
