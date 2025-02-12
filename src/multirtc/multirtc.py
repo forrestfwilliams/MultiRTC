@@ -38,8 +38,6 @@ def print_wkt(umbra_sicd):
     dem = isce3.geometry.DEMInterpolator()
     doppler = umbra_sicd.get_doppler_centroid_grid()
     wkt = isce3.geometry.get_geo_perimeter_wkt(radar_grid, umbra_sicd.orbit, doppler, dem, 3)
-    print(umbra_sicd.starting_range, umbra_sicd.prf)
-    print('\n')
     print(wkt)
 
 

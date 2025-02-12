@@ -40,14 +40,15 @@ class UmbraSICD:
     orbit: isce3.core.Orbit
     row_uvect: np.ndarray
     col_uvect: np.ndarray
-    scp_pos: np.ndarray
-    scp_vel: np.ndarray
+    arp_pos: np.ndarray
+    arp_vel: np.ndarray
     reference_epoch: datetime
     sensing_start: datetime
     sensing_start_sec: float
     sensing_end_sec: float
     shape: tuple[int, int]  # (rows, cols)
     scp_index: tuple[int, int]  # (rows, cols)
+    scp_pos: np.ndarray
     footprint: Polygon
     center: Point
 
@@ -71,36 +72,26 @@ class UmbraSICD:
         ycol = icol * self.azimuth_step
         return xrow, ycol
 
-    def get_doppler_centroid_grid(self):
-        scp_ecef = np.array([self.sicd.GeoData.SCP.ECF.X, self.sicd.GeoData.SCP.ECF.Y, self.sicd.GeoData.SCP.ECF.Z])
-        arp_ecef = np.array([self.sicd.SCPCOA.ARPPos.X, self.sicd.SCPCOA.ARPPos.Y, self.sicd.SCPCOA.ARPPos.Z])
-        vel = np.array([self.sicd.SCPCOA.ARPVel.X, self.sicd.SCPCOA.ARPVel.Y, self.sicd.SCPCOA.ARPVel.Z])
-
-        pixel_buffer = 1_000
-        n_samples = 50
-        row_spacing = (self.sicd.ImageData.NumRows + pixel_buffer) // n_samples
-        rows = np.arange(-25, 26) * row_spacing
-        sicd_row_uvect = self.sicd.Grid.Row.UVectECF
-        row_uvect = np.array([sicd_row_uvect.X, sicd_row_uvect.Y, sicd_row_uvect.Z])
-        row_offset = ((rows * self.sicd.Grid.Row.SS)[:, np.newaxis] * row_uvect).T
-        row_ecef = row_offset + scp_ecef[:, np.newaxis]
-
-        row_vec = row_ecef - arp_ecef[:, np.newaxis]
+    def get_doppler_centroid_grid(self, n_samples=50, pixel_buffer=1_000):
+        half_span = (self.sicd.ImageData.NumRows // 2) + pixel_buffer
+        rows = np.linspace(-half_span, half_span, n_samples, dtype=int)
+        row_offset = ((rows * self.sicd.Grid.Row.SS)[:, np.newaxis] * self.row_uvect).T
+        row_ecef = row_offset + self.scp_pos[:, np.newaxis]
+        row_vec = row_ecef - self.arp_pos[:, np.newaxis]
         # row_vec[1, :] -= 34_000
         row_mag = np.linalg.norm(row_vec, axis=0)
         row_look = row_vec / np.linalg.norm(row_vec, axis=0)
 
-        v_mag = np.linalg.norm(vel)
-        v_hat = vel / v_mag
+        v_mag = np.linalg.norm(self.arp_vel)
+        v_hat = self.arp_vel / v_mag
         row_squint = np.arcsin(np.dot(row_look.T, v_hat))
         row_dc = 2.0 / self.wavelength * v_mag * np.sin(row_squint)
 
-        azimuth_times = np.arange(-1, 3.25, 0.25) * self.sicd.SCPCOA.SCPTime
-
-        doppler = np.tile(row_dc, (len(azimuth_times), 1))
-
+        doppler = np.tile(row_dc, (n_samples, 1))
         avg_diff = np.mean(np.diff(row_mag))
         ranges = np.arange(row_mag[0], row_mag[-1] + 0.01, avg_diff)
+        azimuth_times = np.linspace(-0.75, 2.75, n_samples) * self.sicd.SCPCOA.SCPTime
+
         doppler_lut = isce3.core.LUT2d(xcoord=ranges, ycoord=azimuth_times, data=doppler)
         return doppler_lut
 
@@ -115,9 +106,8 @@ class UmbraSICD:
         for time in times:
             pos = [np.polyval(poly, time) for poly in pos_poly]
             vel = [np.polyval(poly, time) for poly in vel_poly]
-            sv = isce3.core.StateVector(
-                isce3.core.DateTime(sensing_period_start + timedelta(seconds=float(time))), pos, vel
-            )
+            dt_time = isce3.core.DateTime(sensing_period_start + timedelta(seconds=float(time)))
+            sv = isce3.core.StateVector(dt_time, pos, vel)
             svs.append(sv)
         orbit = isce3.core.Orbit(svs, isce3.core.DateTime(sensing_period_start))
         orbit.set_interp_method('Legendre')
@@ -149,7 +139,7 @@ class UmbraSICD:
         return start_range_mag, end_range_mag
 
     def get_stripmap_prf(self):
-        vel_along_track = np.dot(self.scp_vel, self.col_uvect)
+        vel_along_track = np.dot(self.arp_vel, self.col_uvect)
         vel_mag = np.linalg.norm(vel_along_track)
         prf = vel_mag / self.sicd.Grid.Col.SS
         return prf
@@ -187,10 +177,11 @@ class UmbraSICD:
             sensing_end_sec=sicd.ImageFormation.TEndProc,
             row_uvect=np.array([sicd.Grid.Row.UVectECF.X, sicd.Grid.Row.UVectECF.Y, sicd.Grid.Row.UVectECF.Z]),
             col_uvect=np.array([sicd.Grid.Col.UVectECF.X, sicd.Grid.Col.UVectECF.Y, sicd.Grid.Col.UVectECF.Z]),
-            scp_vel=np.array([sicd.SCPCOA.ARPVel.X, sicd.SCPCOA.ARPVel.Y, sicd.SCPCOA.ARPVel.Z]),
-            scp_pos=np.array([sicd.SCPCOA.ARPPos.X, sicd.SCPCOA.ARPPos.Y, sicd.SCPCOA.ARPPos.Z]),
+            arp_vel=np.array([sicd.SCPCOA.ARPVel.X, sicd.SCPCOA.ARPVel.Y, sicd.SCPCOA.ARPVel.Z]),
+            arp_pos=np.array([sicd.SCPCOA.ARPPos.X, sicd.SCPCOA.ARPPos.Y, sicd.SCPCOA.ARPPos.Z]),
             shape=(sicd.ImageData.NumRows, sicd.ImageData.NumCols),  # backwards for shadows-down
             scp_index=(sicd.ImageData.SCPPixel.Row, sicd.ImageData.SCPPixel.Col),  # backwards for shadows-down
+            scp_pos=np.array([sicd.GeoData.SCP.ECF.X, sicd.GeoData.SCP.ECF.Y, sicd.GeoData.SCP.ECF.Z]),
             footprint=footprint,
             center=Point(sicd.GeoData.SCP.LLH.Lat, sicd.GeoData.SCP.LLH.Lon),
         )
