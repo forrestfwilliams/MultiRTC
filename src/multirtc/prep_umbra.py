@@ -28,9 +28,11 @@ class Point:
 class UmbraSICD:
     id: str
     file_path: Path
+    sicd: str
     wavelength: float
     lookside: str  # 'right' or 'left'
     starting_range: float
+    end_range: float
     prf: float
     range_step: float  # meters
     azimuth_step: float  # meters
@@ -51,33 +53,74 @@ class UmbraSICD:
         data = reader[:, :]
         return data
 
+    def get_xrow_ycol(self) -> tuple[np.ndarray]:
+        """Calculate xrow and ycol for the umbra_sicd."""
+        shadows_down_n_rows = self.shape[0]
+        shadows_down_n_cols = self.shape[1]
+
+        irow = np.tile(np.arange(shadows_down_n_cols), (shadows_down_n_rows, 1)).T
+        irow -= self.scp_index[1]
+        xrow = irow * self.range_step
+
+        icol = np.tile(np.arange(shadows_down_n_rows), (shadows_down_n_cols, 1))
+        icol -= self.scp_index[0]
+        ycol = icol * self.azimuth_step
+        return xrow, ycol
+
+    def get_doppler_centroid_grid(self):
+        scp_ecef = np.array([self.sicd.GeoData.SCP.ECF.X, self.sicd.GeoData.SCP.ECF.Y, self.sicd.GeoData.SCP.ECF.Z])
+        arp_ecef = np.array([self.sicd.SCPCOA.ARPPos.X, self.sicd.SCPCOA.ARPPos.Y, self.sicd.SCPCOA.ARPPos.Z])
+        vel = np.array([self.sicd.SCPCOA.ARPVel.X, self.sicd.SCPCOA.ARPVel.Y, self.sicd.SCPCOA.ARPVel.Z])
+
+        pixel_buffer = 1_000
+        n_samples = 50
+        row_spacing = (self.sicd.ImageData.NumRows + pixel_buffer) // n_samples
+        rows = np.arange(-25, 26) * row_spacing
+        sicd_row_uvect = self.sicd.Grid.Row.UVectECF
+        row_uvect = np.array([sicd_row_uvect.X, sicd_row_uvect.Y, sicd_row_uvect.Z])
+        row_offset = ((rows * self.sicd.Grid.Row.SS)[:, np.newaxis] * row_uvect).T
+        row_ecef = row_offset + scp_ecef[:, np.newaxis]
+
+        row_vec = row_ecef - arp_ecef[:, np.newaxis]
+        # row_vec[1, :] -= 34_000
+        row_mag = np.linalg.norm(row_vec, axis=0)
+        row_look = row_vec / np.linalg.norm(row_vec, axis=0)
+
+        v_mag = np.linalg.norm(vel)
+        v_hat = vel / v_mag
+        row_squint = np.arcsin(np.dot(row_look.T, v_hat))
+        row_dc = 2.0 / self.wavelength * v_mag * np.sin(row_squint)
+
+        azimuth_times = np.arange(-1, 3.25, 0.25) * self.sicd.SCPCOA.SCPTime
+
+        doppler = np.tile(row_dc, (len(azimuth_times), 1))
+
+        avg_diff = np.mean(np.diff(row_mag))
+        ranges = np.arange(row_mag[0], row_mag[-1] + 0.01, avg_diff)
+        doppler_lut = isce3.core.LUT2d(xcoord=ranges, ycoord=azimuth_times, data=doppler)
+        return doppler_lut
+
     @staticmethod
-    def calculate_orbit_v2(scp_coa, sensing_period_start):
-        time = np.arange(-10, 11, 1)
-
-        x_vel = scp_coa.ARPVel.X + scp_coa.ARPAcc.X * time
-        x_pos = scp_coa.ARPPos.X + scp_coa.ARPVel.X * time + 0.5 * scp_coa.ARPAcc.X * time**2
-
-        y_vel = scp_coa.ARPVel.Y + scp_coa.ARPAcc.Y * time
-        y_pos = scp_coa.ARPPos.Y + scp_coa.ARPVel.Y * time + 0.5 * scp_coa.ARPAcc.Y * time**2
-
-        z_vel = scp_coa.ARPVel.Z + scp_coa.ARPAcc.Z * time
-        z_pos = scp_coa.ARPPos.Z + scp_coa.ARPVel.Z * time + 0.5 * scp_coa.ARPAcc.Z * time**2
-
-        time_sensing_period = time + scp_coa.SCPTime
-
+    def calculate_orbit(sensing_period_start, position):
+        pos_poly = [position.ARPPoly.X, position.ARPPoly.Y, position.ARPPoly.Z]
+        [check_poly_order(poly) for poly in pos_poly]
+        pos_poly = [poly[::-1] for poly in pos_poly]
+        vel_poly = [np.polyder(poly) for poly in pos_poly]
+        times = np.arange(-30, 31, 1)
         svs = []
-        for i in range(len(time)):
-            sv_time = isce3.core.DateTime(sensing_period_start + timedelta(seconds=time_sensing_period[i]))
-            sv = isce3.core.StateVector(sv_time, [x_pos[i], y_pos[i], z_pos[i]], [x_vel[i], y_vel[i], z_vel[i]])
+        for time in times:
+            pos = [np.polyval(poly, time) for poly in pos_poly]
+            vel = [np.polyval(poly, time) for poly in vel_poly]
+            sv = isce3.core.StateVector(
+                isce3.core.DateTime(sensing_period_start + timedelta(seconds=float(time))), pos, vel
+            )
             svs.append(sv)
-
         orbit = isce3.core.Orbit(svs, isce3.core.DateTime(sensing_period_start))
         orbit.set_interp_method('Legendre')
         return orbit
 
     @staticmethod
-    def calculate_instantaneous_prf(time: float, ipp):
+    def calculate_instantaneous_prf(time: float, ipp, sicd):
         if not ipp.TStart <= time <= ipp.TEnd:
             raise ValueError('Time must be within the IPP')
         check_poly_order(ipp.IPPPoly)
@@ -86,16 +129,20 @@ class UmbraSICD:
         return prf
 
     @staticmethod
-    def calculate_starting_range(sicd):
-        scp_range = sicd.SCPCOA.SlantRange
-        grazing_angle = np.deg2rad(sicd.SCPCOA.GrazeAng) # TODO: is this for slant range?
-        starting_range_to_scene_center = sicd.Grid.Col.SS * sicd.ImageData.SCPPixel.Col
-        starting_range = np.sqrt(
-            scp_range**2
-            + starting_range_to_scene_center**2
-            - (2 * scp_range * starting_range_to_scene_center * np.cos(grazing_angle))
-        )
-        return starting_range
+    def calculate_start_end_range(sicd):
+        sicd_row_uvect = sicd.Grid.Row.UVectECF
+        row_uvect = np.array([sicd_row_uvect.X, sicd_row_uvect.Y, sicd_row_uvect.Z])
+        row_offset = sicd.ImageData.SCPPixel.Row * sicd.Grid.Row.SS * row_uvect
+
+        scp_ecf = np.array([sicd.GeoData.SCP.ECF.X, sicd.GeoData.SCP.ECF.Y, sicd.GeoData.SCP.ECF.Z])
+        arp_ecf = np.array([sicd.SCPCOA.ARPPos.X, sicd.SCPCOA.ARPPos.Y, sicd.SCPCOA.ARPPos.Z])
+
+        start_range_vec = scp_ecf - row_offset - arp_ecf
+        start_range_mag = np.linalg.norm(start_range_vec, axis=0)
+
+        end_range_vec = scp_ecf - row_offset - arp_ecf
+        end_range_mag = np.linalg.norm(end_range_vec, axis=0)
+        return start_range_mag, end_range_mag
 
     @classmethod
     def from_sarpy_sicd(cls, sicd, file_path):
@@ -108,16 +155,18 @@ class UmbraSICD:
         footprint = Polygon([(ic.Lon, ic.Lat) for ic in sicd.GeoData.ImageCorners])
         scp_coa = sicd.SCPCOA
         ipp = list(sicd.Timeline.IPP)[0]
-        prf = cls.calculate_instantaneous_prf(scp_coa.SCPTime, ipp)
-        orbit = cls.calculate_orbit_v2(scp_coa, sensing_period_start)
-        starting_range = cls.calculate_starting_range(sicd)
+        prf = cls.calculate_instantaneous_prf(scp_coa.SCPTime, ipp, sicd)
+        orbit = cls.calculate_orbit(sensing_period_start, sicd.Position)
+        starting_range, end_range = cls.calculate_start_end_range(sicd)
         umbra_sicd = cls(
             id=sicd.CollectionInfo.CoreName,
             file_path=file_path,
+            sicd=sicd,
             wavelength=wavelength,
             lookside=lookside,
             starting_range=starting_range,
             prf=prf,
+            end_range=end_range,
             range_step=range_step,
             azimuth_step=azimuth_step,
             beta0_coeff=sicd.Radiometric.BetaZeroSFPoly.Coefs,
@@ -126,10 +175,10 @@ class UmbraSICD:
             sensing_start=sensing_period_start + timedelta(seconds=sicd.ImageFormation.TStartProc),
             sensing_start_sec=sicd.ImageFormation.TStartProc,
             sensing_end_sec=sicd.ImageFormation.TEndProc,
-            shape=(sicd.ImageData.NumCols, sicd.ImageData.NumRows),
-            scp_index=(sicd.ImageData.SCPPixel.Col, sicd.ImageData.SCPPixel.Row), # backwards for shadows-down
+            shape=(sicd.ImageData.NumRows, sicd.ImageData.NumCols),  # backwards for shadows-down
+            scp_index=(sicd.ImageData.SCPPixel.Row, sicd.ImageData.SCPPixel.Col),  # backwards for shadows-down
             footprint=footprint,
-            center=Point(sicd.GeoData.SCP.LLH.Lon, sicd.GeoData.SCP.LLH.Lat),
+            center=Point(sicd.GeoData.SCP.LLH.Lat, sicd.GeoData.SCP.LLH.Lon),
         )
         return umbra_sicd
 
@@ -138,12 +187,14 @@ class UmbraSICD:
             sensing_start=self.sensing_start_sec,
             wavelength=self.wavelength,
             lookside=self.lookside,
-            length=self.shape[0],
-            width=self.shape[1],
+            # length/width are backwards for shadows-down
+            length=self.shape[1],
+            width=self.shape[0],
             ref_epoch=isce3.core.DateTime(self.reference_epoch),
             range_pixel_spacing=self.range_step,
             starting_range=self.starting_range,
             prf=self.prf,
+            # prf=prf * 5.175,
         )
         assert radar_grid.ref_epoch == self.orbit.reference_epoch
         return radar_grid

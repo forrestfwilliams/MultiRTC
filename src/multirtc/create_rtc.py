@@ -45,6 +45,7 @@ def compute_layover_shadow_mask(
     numiter_geo2rdr: int = 25,
     memory_mode: isce3.core.GeocodeMemoryMode = None,
     geocode_options=None,
+    doppler=None,
 ):
     """
     Compute the layover/shadow mask and geocode it
@@ -94,17 +95,19 @@ def compute_layover_shadow_mask(
     slantrange_layover_shadow_mask_raster: isce3.io.Raster
         Layover/shadow-mask ISCE3 raster object in radar coordinates
     """
+    # if doppler is None:
+    #     doppler = isce3.core.LUT2d()
+
     # determine the output filename
     str_datetime = slc_obj.sensing_start.strftime('%Y%m%d_%H%M%S.%f')
 
     # Run topo to get layover/shadow mask
     ellipsoid = isce3.core.Ellipsoid()
-    grid_doppler = isce3.core.LUT2d()
     rdr2geo_obj = isce3.geometry.Rdr2Geo(
         radar_grid,
         orbit,
         ellipsoid,
-        grid_doppler,
+        doppler,
         threshold=threshold_rdr2geo,
         numiter=numiter_rdr2geo,
         extraiter=extraiter_rdr2geo,
@@ -168,7 +171,7 @@ def compute_layover_shadow_mask(
     geo = isce3.geocode.GeocodeFloat32()
     geo.orbit = orbit
     geo.ellipsoid = ellipsoid
-    geo.doppler = isce3.core.LUT2d()
+    geo.doppler = doppler
     geo.threshold_geo2rdr = threshold_geo2rdr
     geo.numiter_geo2rdr = numiter_geo2rdr
     geo.data_interpolator = 'NEAREST'
@@ -259,7 +262,11 @@ def save_intermediate_geocode_files(
     lookside,
     wavelength,
     orbit,
+    doppler=None,
 ):
+    # if doppler is None:
+    #     doppler = isce3.core.LUT2d()
+
     # FIXME: Computation of range slope is not merged to ISCE yet
     output_obj_list = []
     layers_nbands = 1
@@ -295,9 +302,9 @@ def save_intermediate_geocode_files(
 
     # TODO review this (Doppler)!!!
     # native_doppler = burst.doppler.lut2d
-    native_doppler = isce3.core.LUT2d()
+    native_doppler = doppler
     native_doppler.bounds_error = False
-    grid_doppler = isce3.core.LUT2d()
+    grid_doppler = doppler
     grid_doppler.bounds_error = False
 
     isce3.geogrid.get_radar_grid(
@@ -573,7 +580,7 @@ def umbra_rtc(umbra_sicd, geogrid, opts):
 
     dem_raster = isce3.io.Raster(opts.dem_path)
     ellipsoid = isce3.core.Ellipsoid()
-    zero_doppler = isce3.core.LUT2d()
+    doppler = umbra_sicd.get_doppler_centroid_grid()
     exponent = 2
 
     x_snap = geogrid.spacing_x
@@ -607,6 +614,7 @@ def umbra_rtc(umbra_sicd, geogrid, opts):
         numiter_geo2rdr=opts.geo2rdr_numiter,
         memory_mode=opts.memory_mode_isce3,
         geocode_options=layover_shadow_mask_geocode_kwargs,
+        doppler=doppler,
     )
     logger.info(f'file saved: {layover_shadow_mask_file}')
     if opts.apply_shadow_masking:
@@ -641,7 +649,7 @@ def umbra_rtc(umbra_sicd, geogrid, opts):
     # init geocode members
     geo_obj.orbit = orbit
     geo_obj.ellipsoid = ellipsoid
-    geo_obj.doppler = zero_doppler
+    geo_obj.doppler = doppler
     geo_obj.threshold_geo2rdr = opts.geo2rdr_threshold
     geo_obj.numiter_geo2rdr = opts.geo2rdr_numiter
 
@@ -711,6 +719,7 @@ def umbra_rtc(umbra_sicd, geogrid, opts):
         lookside,
         wavelength,
         orbit,
+        doppler=doppler,
     )
     t_end = time.time()
     logger.info(f'elapsed time: {t_end - t_start}')
