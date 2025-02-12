@@ -38,6 +38,10 @@ class UmbraSICD:
     azimuth_step: float  # meters
     beta0_coeff: np.ndarray
     orbit: isce3.core.Orbit
+    row_uvect: np.ndarray
+    col_uvect: np.ndarray
+    scp_pos: np.ndarray
+    scp_vel: np.ndarray
     reference_epoch: datetime
     sensing_start: datetime
     sensing_start_sec: float
@@ -144,6 +148,12 @@ class UmbraSICD:
         end_range_mag = np.linalg.norm(end_range_vec, axis=0)
         return start_range_mag, end_range_mag
 
+    def get_stripmap_prf(self):
+        vel_along_track = np.dot(self.scp_vel, self.col_uvect)
+        vel_mag = np.linalg.norm(vel_along_track)
+        prf = vel_mag / self.sicd.Grid.Col.SS
+        return prf
+
     @classmethod
     def from_sarpy_sicd(cls, sicd, file_path):
         center_frequency = sicd.RadarCollection.TxFrequency.Min + sicd.RadarCollection.TxFrequency.Max / 2
@@ -175,6 +185,10 @@ class UmbraSICD:
             sensing_start=sensing_period_start + timedelta(seconds=sicd.ImageFormation.TStartProc),
             sensing_start_sec=sicd.ImageFormation.TStartProc,
             sensing_end_sec=sicd.ImageFormation.TEndProc,
+            row_uvect=np.array([sicd.Grid.Row.UVectECF.X, sicd.Grid.Row.UVectECF.Y, sicd.Grid.Row.UVectECF.Z]),
+            col_uvect=np.array([sicd.Grid.Col.UVectECF.X, sicd.Grid.Col.UVectECF.Y, sicd.Grid.Col.UVectECF.Z]),
+            scp_vel=np.array([sicd.SCPCOA.ARPVel.X, sicd.SCPCOA.ARPVel.Y, sicd.SCPCOA.ARPVel.Z]),
+            scp_pos=np.array([sicd.SCPCOA.ARPPos.X, sicd.SCPCOA.ARPPos.Y, sicd.SCPCOA.ARPPos.Z]),
             shape=(sicd.ImageData.NumRows, sicd.ImageData.NumCols),  # backwards for shadows-down
             scp_index=(sicd.ImageData.SCPPixel.Row, sicd.ImageData.SCPPixel.Col),  # backwards for shadows-down
             footprint=footprint,
@@ -193,8 +207,7 @@ class UmbraSICD:
             ref_epoch=isce3.core.DateTime(self.reference_epoch),
             range_pixel_spacing=self.range_step,
             starting_range=self.starting_range,
-            prf=self.prf,
-            # prf=prf * 5.175,
+            prf=self.get_stripmap_prf(),
         )
         assert radar_grid.ref_epoch == self.orbit.reference_epoch
         return radar_grid

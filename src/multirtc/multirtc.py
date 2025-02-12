@@ -35,7 +35,7 @@ def opera_rtc_s1_burst(granule: str, resolution: int = 30, work_dir: Optional[Pa
 
 def print_wkt(umbra_sicd):
     radar_grid = umbra_sicd.as_isce3_radargrid()
-    dem = isce3.geometry.DEMInterpolator(7000.0)
+    dem = isce3.geometry.DEMInterpolator()
     doppler = umbra_sicd.get_doppler_centroid_grid()
     wkt = isce3.geometry.get_geo_perimeter_wkt(radar_grid, umbra_sicd.orbit, doppler, dem, 3)
     print(umbra_sicd.starting_range, umbra_sicd.prf)
