@@ -44,6 +44,7 @@ class UmbraSICD:
     scp_index: tuple[int, int]  # (rows, cols)
     footprint: Polygon
     center: Point
+    scp_time_sec: float
     arp_pos: np.ndarray
     arp_vel: np.ndarray
     row_uvect: np.ndarray
@@ -117,6 +118,28 @@ class UmbraSICD:
         orbit.set_interp_method('Legendre')
         return orbit
 
+    def get_doppler_centroid_grid(self, n_samples=50, pixel_buffer=1_000):
+        half_span = (self.shape[0] // 2) + pixel_buffer
+        rows = np.linspace(-half_span, half_span, n_samples, dtype=int)
+        row_offset = ((rows * self.row_ss)[:, np.newaxis] * self.row_uvect).T
+        row_ecef = row_offset + self.scp_pos[:, np.newaxis]
+        row_vec = row_ecef - self.arp_pos[:, np.newaxis]
+        row_mag = np.linalg.norm(row_vec, axis=0)
+        row_look = row_vec / np.linalg.norm(row_vec, axis=0)
+
+        v_mag = np.linalg.norm(self.arp_vel)
+        v_hat = self.arp_vel / v_mag
+        row_squint = np.arcsin(np.dot(row_look.T, v_hat))
+        row_dc = 2.0 / self.wavelength * v_mag * np.sin(row_squint)
+
+        doppler = np.tile(row_dc, (n_samples, 1))
+        avg_diff = np.mean(np.diff(row_mag))
+        ranges = np.arange(row_mag[0], row_mag[-1] + 0.01, avg_diff)
+        azimuth_times = np.linspace(-0.75, 2.75, n_samples) * self.scp_time_sec
+
+        doppler_lut = isce3.core.LUT2d(xcoord=ranges, ycoord=azimuth_times, data=doppler)
+        return doppler_lut
+
     @staticmethod
     def calculate_instantaneous_prf(time: float, ipp):
         if not ipp.TStart <= time <= ipp.TEnd:
@@ -183,6 +206,7 @@ class UmbraSICD:
             row_ss=sicd.Grid.Row.SS,
             col_uvect=np.array([sicd.Grid.Col.UVectECF.X, sicd.Grid.Col.UVectECF.Y, sicd.Grid.Col.UVectECF.Z]),
             col_ss=sicd.Grid.Col.SS,
+            scp_time_sec=sicd.SCPCOA.SCPTime,
         )
         return umbra_sicd
 
@@ -196,7 +220,7 @@ class UmbraSICD:
             ref_epoch=isce3.core.DateTime(self.reference_epoch),
             range_pixel_spacing=self.range_step,
             starting_range=self.starting_range,
-            prf=self.get_stripmap_prf()
+            prf=self.get_stripmap_prf(),
         )
         assert radar_grid.ref_epoch == self.orbit.reference_epoch
         return radar_grid
