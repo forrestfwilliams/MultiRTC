@@ -45,6 +45,7 @@ class UmbraSICD:
     footprint: Polygon
     center: Point
     scp_time_sec: float
+    scp_pos: np.ndarray
     arp_pos: np.ndarray
     arp_vel: np.ndarray
     row_uvect: np.ndarray
@@ -200,13 +201,14 @@ class UmbraSICD:
             scp_index=(sicd.ImageData.SCPPixel.Row, sicd.ImageData.SCPPixel.Col),
             footprint=footprint,
             center=Point(sicd.GeoData.SCP.LLH.Lon, sicd.GeoData.SCP.LLH.Lat),
+            scp_time_sec=sicd.SCPCOA.SCPTime,
+            scp_pos=np.array([sicd.GeoData.SCP.ECF.X, sicd.GeoData.SCP.ECF.Y, sicd.GeoData.SCP.ECF.Z]),
             arp_pos=np.array([sicd.SCPCOA.ARPPos.X, sicd.SCPCOA.ARPPos.Y, sicd.SCPCOA.ARPPos.Z]),
             arp_vel=np.array([sicd.SCPCOA.ARPVel.X, sicd.SCPCOA.ARPVel.Y, sicd.SCPCOA.ARPVel.Z]),
             row_uvect=np.array([sicd.Grid.Row.UVectECF.X, sicd.Grid.Row.UVectECF.Y, sicd.Grid.Row.UVectECF.Z]),
             row_ss=sicd.Grid.Row.SS,
             col_uvect=np.array([sicd.Grid.Col.UVectECF.X, sicd.Grid.Col.UVectECF.Y, sicd.Grid.Col.UVectECF.Z]),
             col_ss=sicd.Grid.Col.SS,
-            scp_time_sec=sicd.SCPCOA.SCPTime,
         )
         return umbra_sicd
 

@@ -99,7 +99,7 @@ def snap_geogrid(geogrid, x_snap, y_snap):
     return geogrid
 
 
-def generate_geogrids(slc_obj, resolution: int, epsg: int = None):
+def generate_geogrids(slc_obj, resolution: int, epsg: int = None, nonzero_doppler: bool = False):
     """
     Compute the slc geogrid
     """
@@ -110,7 +110,12 @@ def generate_geogrids(slc_obj, resolution: int, epsg: int = None):
     if epsg is None:
         epsg = get_point_epsg(slc_obj.center.y, slc_obj.center.x)
 
+    if nonzero_doppler:
+        doppler = slc_obj.get_doppler_centroid_grid()
+    else:
+        doppler = isce3.core.LUT2d()
+
     radar_grid = slc_obj.as_isce3_radargrid()
-    geogrid = isce3.product.bbox_to_geogrid(radar_grid, slc_obj.orbit, isce3.core.LUT2d(), x_spacing, y_spacing, epsg)
+    geogrid = isce3.product.bbox_to_geogrid(radar_grid, slc_obj.orbit, doppler, x_spacing, y_spacing, epsg)
     geogrid_snapped = snap_geogrid(geogrid, x_snap, y_snap)
     return geogrid_snapped
