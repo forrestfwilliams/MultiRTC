@@ -44,6 +44,12 @@ class UmbraSICD:
     scp_index: tuple[int, int]  # (rows, cols)
     footprint: Polygon
     center: Point
+    arp_pos: np.ndarray
+    arp_vel: np.ndarray
+    row_uvect: np.ndarray
+    row_ss: float
+    col_uvect: np.ndarray
+    col_ss: float
 
     def load_data(self):
         """Load data from the UMBRA SICD file."""
@@ -123,7 +129,7 @@ class UmbraSICD:
     @staticmethod
     def calculate_starting_range(sicd):
         scp_range = sicd.SCPCOA.SlantRange
-        grazing_angle = np.deg2rad(sicd.SCPCOA.GrazeAng) # TODO: is this for slant range?
+        grazing_angle = np.deg2rad(sicd.SCPCOA.GrazeAng)  # TODO: is this for slant range?
         starting_range_to_scene_center = sicd.Grid.Col.SS * sicd.ImageData.SCPPixel.Col
         starting_range = np.sqrt(
             scp_range**2
@@ -131,6 +137,12 @@ class UmbraSICD:
             - (2 * scp_range * starting_range_to_scene_center * np.cos(grazing_angle))
         )
         return starting_range
+
+    def get_stripmap_prf(self):
+        vel_along_track = np.dot(self.arp_vel, self.col_uvect)
+        vel_mag = np.linalg.norm(vel_along_track)
+        prf = vel_mag / self.col_ss
+        return prf
 
     @classmethod
     def from_sarpy_sicd(cls, sicd, file_path):
@@ -165,6 +177,12 @@ class UmbraSICD:
             scp_index=(sicd.ImageData.SCPPixel.Row, sicd.ImageData.SCPPixel.Col),
             footprint=footprint,
             center=Point(sicd.GeoData.SCP.LLH.Lon, sicd.GeoData.SCP.LLH.Lat),
+            arp_pos=np.array([sicd.SCPCOA.ARPPos.X, sicd.SCPCOA.ARPPos.Y, sicd.SCPCOA.ARPPos.Z]),
+            arp_vel=np.array([sicd.SCPCOA.ARPVel.X, sicd.SCPCOA.ARPVel.Y, sicd.SCPCOA.ARPVel.Z]),
+            row_uvect=np.array([sicd.Grid.Row.UVectECF.X, sicd.Grid.Row.UVectECF.Y, sicd.Grid.Row.UVectECF.Z]),
+            row_ss=sicd.Grid.Row.SS,
+            col_uvect=np.array([sicd.Grid.Col.UVectECF.X, sicd.Grid.Col.UVectECF.Y, sicd.Grid.Col.UVectECF.Z]),
+            col_ss=sicd.Grid.Col.SS,
         )
         return umbra_sicd
 
@@ -178,7 +196,7 @@ class UmbraSICD:
             ref_epoch=isce3.core.DateTime(self.reference_epoch),
             range_pixel_spacing=self.range_step,
             starting_range=self.starting_range,
-            prf=self.prf,
+            prf=self.get_stripmap_prf()
         )
         assert radar_grid.ref_epoch == self.orbit.reference_epoch
         return radar_grid
