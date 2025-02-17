@@ -73,7 +73,7 @@ class UmbraSICD:
         return xrow, ycol
 
     def get_doppler_centroid_grid(self, n_samples=50, pixel_buffer=1_000):
-        half_span = (self.sicd.ImageData.NumRows // 2) + pixel_buffer
+        half_span = (self.shape[0] // 2) + pixel_buffer
         rows = np.linspace(-half_span, half_span, n_samples, dtype=int)
         row_offset = ((rows * self.sicd.Grid.Row.SS)[:, np.newaxis] * self.row_uvect).T
         row_ecef = row_offset + self.scp_pos[:, np.newaxis]

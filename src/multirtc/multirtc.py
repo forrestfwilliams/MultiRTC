@@ -61,9 +61,9 @@ def opera_rtc_umbra_sicd(granule: str, resolution: int = 30, work_dir: Optional[
     print_wkt(umbra_sicd)
 
     # radar_grid = umbra_sicd.as_isce3_radargrid()
-    # opts = RtcOptions(dem_path=str(dem_path), output_dir=str(output_dir), resolution=resolution)
-    # geogrid = generate_geogrids(umbra_sicd, opts.resolution)
-    # umbra_rtc(umbra_sicd, geogrid, opts)
+    opts = RtcOptions(dem_path=str(dem_path), output_dir=str(output_dir), resolution=resolution)
+    geogrid = generate_geogrids(umbra_sicd, opts.resolution, nonzero_doppler=True)
+    umbra_rtc(umbra_sicd, geogrid, opts)
 
 
 def main():

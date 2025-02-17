@@ -7,14 +7,14 @@ from multirtc.prep_umbra import UmbraSICD
 
 def get_xrow_ycol(umbra_sicd: UmbraSICD) -> np.ndarray:
     """Calculate xrow and ycol for the umbra_sicd."""
-    shadows_down_n_rows = umbra_sicd.shape[0]
-    shadows_down_n_cols = umbra_sicd.shape[1]
+    n_rows = umbra_sicd.shape[0]
+    n_cols = umbra_sicd.shape[1]
 
-    irow = np.tile(np.arange(shadows_down_n_cols), (shadows_down_n_rows, 1)).T
+    irow = np.tile(np.arange(n_rows), (n_cols, 1)).T
     irow -= umbra_sicd.scp_index[0]
     xrow = irow * umbra_sicd.azimuth_step
 
-    icol = np.tile(np.arange(shadows_down_n_rows), (shadows_down_n_cols, 1))
+    icol = np.tile(np.arange(n_cols), (n_rows, 1))
     icol -= umbra_sicd.scp_index[1]
     ycol = icol * umbra_sicd.range_step
     return xrow, ycol
