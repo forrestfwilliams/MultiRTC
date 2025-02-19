@@ -52,6 +52,7 @@ class UmbraSICD:
     row_ss: float
     col_uvect: np.ndarray
     col_ss: float
+    doppler_cone_angle: float
 
     def load_data(self):
         """Load data from the UMBRA SICD file."""
@@ -119,7 +120,44 @@ class UmbraSICD:
         orbit.set_interp_method('Legendre')
         return orbit
 
+    def get_doppler_at_point(self, time, range_distance, dem):
+        pos, vel = self.orbit.interpolate(time)
+        vel_mag = np.linalg.norm(vel)
+        vel_hat = vel / vel_mag
+        xyz = isce3.geometry.rdr2geo_cone(
+            radar_xyz=pos,
+            axis=vel_hat,
+            angle=self.doppler_cone_angle,
+            range=range_distance,
+            dem=dem,
+            side=self.lookside,
+        )
+        xyz = np.asarray(xyz)
+        look = (xyz - pos) / np.linalg.norm(xyz - pos)
+        squint = np.arcsin(look.dot(vel_hat))
+        doppler = 2.0 / self.wavelength * vel_mag * np.sin(squint)
+        return doppler
+
     def get_doppler_centroid_grid(self, n_samples=50, pixel_buffer=1_000):
+        half_span = (self.shape[0] // 2) + pixel_buffer
+        rows = np.linspace(-half_span, half_span, n_samples, dtype=int)
+        row_offset = ((rows * self.row_ss)[:, np.newaxis] * self.row_uvect).T
+        row_ecef = row_offset + self.scp_pos[:, np.newaxis]
+        row_vec = row_ecef - self.arp_pos[:, np.newaxis]
+        row_mag = np.linalg.norm(row_vec, axis=0)
+
+        avg_diff = np.mean(np.diff(row_mag))
+        ranges = np.arange(row_mag[0], row_mag[-1] + 0.01, avg_diff)
+        azimuth_times = np.linspace(-0.75, 2.75, n_samples) * self.scp_time_sec
+        doppler = np.zeros((n_samples, n_samples))
+        dem = isce3.geometry.DEMInterpolator()
+        for i, t in enumerate(azimuth_times):
+            for j, r in enumerate(ranges):
+                doppler[i, j] = self.get_doppler_at_point(t, r, dem)
+        doppler_lut = isce3.core.LUT2d(xcoord=ranges, ycoord=azimuth_times, data=doppler)
+        return doppler_lut
+
+    def get_doppler_centroid_grid_v1(self, n_samples=50, pixel_buffer=1_000):
         half_span = (self.shape[0] // 2) + pixel_buffer
         rows = np.linspace(-half_span, half_span, n_samples, dtype=int)
         row_offset = ((rows * self.row_ss)[:, np.newaxis] * self.row_uvect).T
@@ -209,6 +247,8 @@ class UmbraSICD:
             row_ss=sicd.Grid.Row.SS,
             col_uvect=np.array([sicd.Grid.Col.UVectECF.X, sicd.Grid.Col.UVectECF.Y, sicd.Grid.Col.UVectECF.Z]),
             col_ss=sicd.Grid.Col.SS,
+            # doppler_cone_angle=np.deg2rad(90-(sicd.SCPCOA.DopplerConeAng-1.25)),
+            doppler_cone_angle=np.deg2rad(90-(sicd.SCPCOA.DopplerConeAng-1.25)),
         )
         return umbra_sicd
 
