@@ -6,6 +6,7 @@ from typing import Optional
 
 import isce3
 import numpy as np
+from PIL import Image
 
 # from numpy.polynomial.polynomial import polyval
 from sarpy.io.complex.sicd import SICDReader
@@ -139,6 +140,7 @@ class UmbraSICD:
         azimuth_times = np.linspace(-0.75, 2.75, n_samples) * self.scp_time_sec
 
         doppler_lut = isce3.core.LUT2d(xcoord=ranges, ycoord=azimuth_times, data=doppler)
+        doppler_lut = isce3.core.LUT2d()
         return doppler_lut
 
     @staticmethod
@@ -226,6 +228,22 @@ class UmbraSICD:
         )
         assert radar_grid.ref_epoch == self.orbit.reference_epoch
         return radar_grid
+
+    def save_browse(self, out_path, min_db=-30):
+        """Save a PNG browse image of the SICD SLC data"""
+        data = self.load_data()
+        power_db = 10 * np.log10(data.real**2 + data.imag**2)
+        col_step = int(self.row_ss // self.col_ss)
+        power_db = power_db[:, ::col_step]
+        vmin, vmax = np.percentile(power_db, (16, 84))
+        vmin = max(vmin, min_db)
+        power_db = np.clip(power_db, vmin, vmax)
+        power_db = (power_db - vmin) / (vmax - vmin) * 255
+        power_db = power_db.astype(np.uint8)
+        power_db = power_db.T
+        img = Image.fromarray(power_db, mode='L')
+        img.thumbnail((2**11, 2**11))
+        img.save(out_path)
 
 
 def prep_umbra(granule_path: Path, work_dir: Optional[Path] = None) -> Path:
