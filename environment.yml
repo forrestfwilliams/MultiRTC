@@ -4,7 +4,7 @@ channels:
   - nodefaults
 dependencies:
   # For running
-  - python>=3.9,<3.10
+  - python
   - pip
   # OPERA RTC-sourced requirements
   - gdal>=3.0
@@ -12,12 +12,10 @@ dependencies:
   - boto3
   - shapely
   - s1reader>=0.2.4
-  - isce3==0.15.0
+  - isce3
   - sarpy
   - earthaccess
   - burst2safe
-  # Workaround for the issue with `libabseil` (09/11/2023)
-  - libabseil=20230125.3
   # For packaging, and testing
   - setuptools
   - setuptools_scm

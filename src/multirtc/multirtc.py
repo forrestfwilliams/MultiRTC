@@ -56,10 +56,11 @@ def opera_rtc_umbra_sicd(granule: str, resolution: int = 30, work_dir: Optional[
         raise FileNotFoundError(f'Umbra SICD must be present in input dir {input_dir} for processing.')
     [d.mkdir(parents=True, exist_ok=True) for d in [input_dir, output_dir]]
     umbra_sicd, dem_path = prep_umbra(granule_path, work_dir=input_dir)
-    print_wkt(umbra_sicd)
-    opts = RtcOptions(dem_path=str(dem_path), output_dir=str(output_dir), resolution=resolution)
-    geogrid = generate_geogrids(umbra_sicd, opts.resolution, nonzero_doppler=True)
-    umbra_rtc(umbra_sicd, geogrid, opts)
+    polygon = umbra_sicd.calculate_footprint()
+    # print_wkt(umbra_sicd)
+    # opts = RtcOptions(dem_path=str(dem_path), output_dir=str(output_dir), resolution=resolution)
+    # geogrid = generate_geogrids(umbra_sicd, opts.resolution, nonzero_doppler=True)
+    # umbra_rtc(umbra_sicd, geogrid, opts)
 
 
 def main():
