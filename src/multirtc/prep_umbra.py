@@ -66,55 +66,6 @@ class UmbraSICD:
             svs.append(isce3.core.StateVector(t, pos, vel_arp))
         return isce3.core.Orbit(svs, sensing_start_isce)
 
-    def get_doppler_centroid_grid(self, n_samples=50, pixel_buffer=1_000):
-        half_span = (self.shape[0] // 2) + pixel_buffer
-        rows = np.linspace(-half_span, half_span, n_samples, dtype=int)
-        row_offset = ((rows * self.row_ss)[:, np.newaxis] * self.row_uvect).T
-        row_ecef = row_offset + self.scp_pos[:, np.newaxis]
-        row_vec = row_ecef - self.arp_pos[:, np.newaxis]
-        row_mag = np.linalg.norm(row_vec, axis=0)
-        row_look = row_vec / np.linalg.norm(row_vec, axis=0)
-
-        v_mag = np.linalg.norm(self.arp_vel)
-        v_hat = self.arp_vel / v_mag
-        row_squint = np.arcsin(np.dot(row_look.T, v_hat))
-        row_dc = 2.0 / self.wavelength * v_mag * np.sin(row_squint)
-
-        doppler = np.tile(row_dc, (n_samples, 1))
-        avg_diff = np.mean(np.diff(row_mag))
-        ranges = np.arange(row_mag[0], row_mag[-1] + 0.01, avg_diff)
-        azimuth_times = np.linspace(-0.75, 2.75, n_samples) * self.scp_time_sec
-
-        doppler_lut = isce3.core.LUT2d(xcoord=ranges, ycoord=azimuth_times, data=doppler)
-        return doppler_lut
-
-    @staticmethod
-    def calculate_instantaneous_prf(time: float, ipp):
-        if not ipp.TStart <= time <= ipp.TEnd:
-            raise ValueError('Time must be within the IPP')
-        check_poly_order(ipp.IPPPoly)
-        prf_coeff = np.polyder(ipp.IPPPoly.Coefs[::-1])
-        prf = np.polyval(prf_coeff, time)
-        return prf
-
-    @staticmethod
-    def calculate_starting_range(sicd):
-        scp_range = sicd.SCPCOA.SlantRange
-        grazing_angle = np.deg2rad(sicd.SCPCOA.GrazeAng)  # TODO: is this for slant range?
-        starting_range_to_scene_center = sicd.Grid.Col.SS * sicd.ImageData.SCPPixel.Col
-        starting_range = np.sqrt(
-            scp_range**2
-            + starting_range_to_scene_center**2
-            - (2 * scp_range * starting_range_to_scene_center * np.cos(grazing_angle))
-        )
-        return starting_range
-
-    def get_stripmap_prf(self):
-        vel_along_track = np.dot(self.arp_vel, self.col_uvect)
-        vel_mag = np.linalg.norm(vel_along_track)
-        prf = vel_mag / self.col_ss
-        return prf
-
     @staticmethod
     def calculate_range_range_rate_offset(scp_pos, arp_pos, arp_vel, time_coa):
         arp_minus_scp = arp_pos - scp_pos
