@@ -13,6 +13,7 @@ from sarpy.io.complex.sicd import SICDReader
 from shapely.geometry import Polygon
 
 from multirtc import dem
+from multirtc.define_geogrid import get_point_epsg
 
 
 def check_poly_order(poly):
@@ -35,6 +36,7 @@ class UmbraSICD:
     lookside: str  # 'right' or 'left'
     scp_time: float
     scp_pos: np.ndarray
+    center: Point
     scp_hae: float
     coa_time: float
     arp_pos: np.ndarray
@@ -186,6 +188,7 @@ class UmbraSICD:
             lookside=lookside,
             scp_time=scp_time,
             scp_pos=scp_pos,
+            center=Point(sicd.GeoData.SCP.LLH.Lon, sicd.GeoData.SCP.LLH.Lat),
             scp_hae=scp_hae,
             coa_time=coa_time,
             arp_pos=arp_pos,
@@ -243,21 +246,42 @@ class UmbraSICD:
         rgaz /= self.grid_mult[:, None]
         rgaz += self.grid_shift[:, None]
         row_col = rgaz.T.copy()
-        breakpoint()
         return row_col
 
-    def calculate_footprint(self):
-        points = np.array([(0, 0), (self.shape[0], 0), self.shape, (0, self.shape[1])])
+    def get_geogrid(self, x_spacing, y_spacing):
+        ecef = pyproj.CRS(4978)  # ECEF on WGS84 Ellipsoid
+        lla = pyproj.CRS(4979)  # WGS84 lat/lon/ellipsoid height
+        local_utm = pyproj.CRS(get_point_epsg(self.center.y, self.center.x))
+        lla2utm = pyproj.Transformer.from_crs(lla, local_utm, always_xy=True)
+        utm2lla = pyproj.Transformer.from_crs(local_utm, lla, always_xy=True)
+        ecef2lla = pyproj.Transformer.from_crs(ecef, lla, always_xy=True)
+
+        lla_point = (self.center.x, self.center.y)
+        utm_point = lla2utm.transform(*lla_point)
+        utm_point_shift = (utm_point[0] + x_spacing, utm_point[1])
+        lla_point_shift = utm2lla.transform(*utm_point_shift)
+        x_spacing = lla_point_shift[0] - lla_point[0]
+        y_spacing = -1 * x_spacing
+
+        points = np.array([(0, 0), (0, self.shape[1]), self.shape, (self.shape[0], 0)])
         geos = self.rowcol2geo(points)
 
-        # ECEF on WGS84 Ellipsoid
-        ecef = pyproj.CRS(4978)
-        # WGS84 lat/lon/ellipsoid height
-        lla = pyproj.CRS(4979)
-        ecef2lla = pyproj.Transformer.from_crs(ecef, lla, always_xy=True)
-        llh = np.vstack(ecef2lla.transform(geos[:, 0], geos[:, 1], geos[:, 2])).T
-        poly = Polygon(llh[:, :2])
-        return poly
+        points = np.vstack(ecef2lla.transform(geos[:, 0], geos[:, 1], geos[:, 2])).T
+        minx, maxx = np.min(points[:, 0]), np.max(points[:, 0])
+        miny, maxy = np.min(points[:, 1]), np.max(points[:, 1])
+
+        width = (maxx - minx) // x_spacing
+        length = (maxy - miny) // np.abs(y_spacing)
+        geogrid = isce3.product.GeoGridParameters(
+            start_x=float(minx),
+            start_y=float(maxy),
+            spacing_x=float(x_spacing),
+            spacing_y=float(y_spacing),
+            length=int(length),
+            width=int(width),
+            epsg=4979,
+        )
+        return geogrid
 
     def calculate_range_rangerate_arrays(self):
         rows = np.arange(0, self.shape[0], step=50)

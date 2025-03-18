@@ -5,6 +5,7 @@ from pathlib import Path
 
 import isce3
 import numpy as np
+import pyproj
 from osgeo import gdal
 from s1reader.s1_burst_slc import Sentinel1BurstSlc
 from scipy import ndimage
@@ -557,7 +558,7 @@ def run_single_job(product_id: str, burst: Sentinel1BurstSlc, geogrid, opts: Rtc
     logger.info(f'elapsed time: {t_end - t_start}')
 
 
-def umbra_rtc(umbra_sicd, geogrid, opts):
+def umbra_rtc_v1(umbra_sicd, geogrid, opts):
     # Common initializations
     t_start = time.time()
     output_dir = str(opts.output_dir)
@@ -724,3 +725,37 @@ def umbra_rtc(umbra_sicd, geogrid, opts):
     )
     t_end = time.time()
     logger.info(f'elapsed time: {t_end - t_start}')
+
+
+def umbra_rtc(umbra_sicd, geogrid):
+    slc_data = umbra_sicd.load_data()
+    ecef = pyproj.CRS(4978)  # ECEF on WGS84 Ellipsoid
+    lla = pyproj.CRS(4979)  # WGS84
+    lla2ecef = pyproj.Transformer.from_crs(lla, ecef, always_xy=True)
+    dem = isce3.geometry.DEMInterpolator(umbra_sicd.scp_hae)
+    output = np.zeros((geogrid.length, geogrid.width), dtype=np.complex64)
+    mask = np.zeros((geogrid.length, geogrid.width), dtype=bool)
+
+    for i in range(geogrid.width):
+        for j in range(geogrid.length):
+            x = geogrid.start_x + (i * geogrid.spacing_x) - (geogrid.spacing_x / 2)
+            y = geogrid.start_y + (j * geogrid.spacing_y) + (geogrid.spacing_y / 2)
+            hae = dem.interpolate_lonlat(x, y)
+            ecef_x, ecef_y, ecef_z = lla2ecef.transform(x, y, hae)
+            row, col = umbra_sicd.geo2rowcol(np.array([(ecef_x, ecef_y, ecef_z)]))[0]
+            row = np.round(row).astype(int)
+            col = np.round(col).astype(int)
+            if not ((0 < row < umbra_sicd.shape[0]) and (0 < col < umbra_sicd.shape[1])):
+                continue
+            output[j, i] = slc_data[row, col]
+            mask[j, i] = 1
+
+    output = 10 * np.log10(output.real**2 + output.imag**2)
+    output[mask == 0] = 0
+    driver = gdal.GetDriverByName('GTiff')
+    out_ds = driver.Create('output.tif', geogrid.width, geogrid.length, 1, gdal.GDT_Float32)
+    out_ds.SetGeoTransform([geogrid.start_x, geogrid.spacing_x, 0, geogrid.start_y, 0, geogrid.spacing_y])
+    out_ds.SetProjection(lla.to_wkt())
+    out_ds.GetRasterBand(1).WriteArray(output)
+    out_ds.GetRasterBand(1).SetNoDataValue(0)
+    out_ds = None
