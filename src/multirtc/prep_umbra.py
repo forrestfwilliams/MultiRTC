@@ -43,6 +43,7 @@ class UmbraSICD:
     grid_mult: np.ndarray
     rrdot_offset: np.ndarray
     transform_matrix: np.ndarray
+    transform_matrix_inv: np.ndarray
     orbit: isce3.core.Orbit
     beta0_coeff: np.ndarray
 
@@ -193,19 +194,21 @@ class UmbraSICD:
             grid_mult=grid_mult,
             rrdot_offset=rrdot_offset,
             transform_matrix=transform_matrix,
+            transform_matrix_inv=np.linalg.inv(transform_matrix),
             orbit=orbit,
             beta0_coeff=beta0_coeff,
         )
         return umbra_sicd
 
-    def rowcol2geo(self, rc, hae=None):
-        """
-        Transform (row, col) to ECEF xyz.
+    def rowcol2geo(self, rc: np.ndarray, hae: float = None) -> np.ndarray:
+        """Transforma (row, col) coordinates to ECEF coordinates.
 
-        Parameters
-        ----------
-        rc: np.ndarray
-            Pair of floats of shape `N x 2`
+        Args:
+            rc: Tuple of (row, col) coordinates
+            hae: Height above ellipsoid (meters)
+
+        Returns:
+            np.ndarray: ECEF coordinates
         """
         if hae is None:
             hae = self.scp_hae
@@ -216,13 +219,32 @@ class UmbraSICD:
         rrdot = np.dot(self.transform_matrix, rgaz.T) + self.rrdot_offset[:, None]
         side = isce3.core.LookSide(1) if self.lookside == 'left' else isce3.core.LookSide(-1)
         pts_ecf = []
+        wvl = 1.0
         for pt in rrdot.T:
             r = pt[0]
-            wvl = 1.0
             dop = -pt[1] * 2 / wvl
             llh = isce3.geometry.rdr2geo(0.0, r, self.orbit, side, dop, wvl, dem, threshold=1.0e-8, maxiter=50)
             pts_ecf.append(elp.lon_lat_to_xyz(llh))
         return np.vstack(pts_ecf)
+
+    def geo2rowcol(self, xyz: np.ndarray) -> np.ndarray:
+        """Transform ECEF xyz to (row, col).
+
+        Args:
+            xyz: ECEF coordinates
+
+        Returns:
+            (row, col) coordinates
+        """
+        rrdot = np.zeros((2, xyz.shape[0]))
+        rrdot[0, :] = np.linalg.norm(xyz - self.arp_pos[None, :], axis=1)
+        rrdot[1, :] = np.dot(-self.arp_vel, (xyz - self.arp_pos[None, :]).T) / rrdot[0, :]
+        rgaz = np.dot(self.transform_matrix_inv, (rrdot - self.rrdot_offset[:, None]))
+        rgaz /= self.grid_mult[:, None]
+        rgaz += self.grid_shift[:, None]
+        row_col = rgaz.T.copy()
+        breakpoint()
+        return row_col
 
     def calculate_footprint(self):
         points = np.array([(0, 0), (self.shape[0], 0), self.shape, (0, self.shape[1])])
@@ -237,20 +259,19 @@ class UmbraSICD:
         poly = Polygon(llh[:, :2])
         return poly
 
-    def as_isce3_radargrid(self):
-        radar_grid = isce3.product.RadarGridParameters(
-            sensing_start=self.sensing_start_sec,
-            wavelength=self.wavelength,
-            lookside=self.lookside,
-            length=self.shape[1],
-            width=self.shape[0],
-            ref_epoch=isce3.core.DateTime(self.reference_epoch),
-            range_pixel_spacing=self.range_step,
-            starting_range=self.starting_range,
-            prf=self.get_stripmap_prf(),
-        )
-        assert radar_grid.ref_epoch == self.orbit.reference_epoch
-        return radar_grid
+    def calculate_range_rangerate_arrays(self):
+        rows = np.arange(0, self.shape[0], step=50)
+        cols = np.arange(0, self.shape[1], step=50)
+        ranges = np.zeros((rows.size, cols.size))
+        range_rates = np.zeros((rows.size, cols.size))
+        for i, r in enumerate(rows):
+            for j, c in enumerate(cols):
+                rc = np.array([r, c])
+                rgaz = (rc - self.grid_shift[None, :]) * self.grid_mult[None, :]
+                rrdot = np.dot(self.transform_matrix, rgaz.T) + self.rrdot_offset[:, None]
+                ranges[i, j] = rrdot[0]
+                range_rates[i, j] = rrdot[1]
+        return ranges, range_rates
 
 
 def prep_umbra(granule_path: Path, work_dir: Optional[Path] = None) -> Path:
