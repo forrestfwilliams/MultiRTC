@@ -57,7 +57,7 @@ def opera_rtc_umbra_sicd(granule: str, resolution: int = 30, work_dir: Optional[
     [d.mkdir(parents=True, exist_ok=True) for d in [input_dir, output_dir]]
     umbra_sicd, dem_path = prep_umbra(granule_path, work_dir=input_dir)
     geogrid = generate_geogrids(umbra_sicd, resolution, rda=False)
-    umbra_rtc(umbra_sicd, geogrid)
+    umbra_rtc(umbra_sicd, geogrid, dem_path)
 
 
 def main():
