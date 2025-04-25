@@ -68,7 +68,7 @@ def main():
     """
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('granule', help='Data granule to create an RTC for.')
-    parser.add_argument('--resolution', default=30, type=int, help='Resolution of the output RTC (m)')
+    parser.add_argument('--resolution', default=30, type=float, help='Resolution of the output RTC (m)')
     parser.add_argument('--work-dir', type=Path, default=None, help='Working directory for processing')
     args = parser.parse_args()
 
