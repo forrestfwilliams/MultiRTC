@@ -73,7 +73,7 @@ def download_opera_dem_for_footprint(output_path, footprint, buffer=0.2):
     output_dir = output_path.parent
     if output_path.exists():
         return output_path
-    
+
     footprint = box(*footprint.buffer(buffer).bounds)
     footprints = check_antimeridean(footprint)
     latlon_pairs = []

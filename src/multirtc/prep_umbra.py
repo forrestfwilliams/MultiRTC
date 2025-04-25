@@ -230,7 +230,8 @@ class UmbraSICD:
             spacing_y=float(y_spacing),
             length=int(length),
             width=int(width),
-            epsg=4979,
+            # epsg=4979,
+            epsg=4326,
         )
         return geogrid
 
