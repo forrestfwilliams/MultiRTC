@@ -560,7 +560,7 @@ def run_single_job(product_id: str, burst: Sentinel1BurstSlc, geogrid, opts: Rtc
     logger.info(f'elapsed time: {t_end - t_start}')
 
 
-def umbra_rtc_v1(umbra_sicd, geogrid, opts):
+def umbra_rtc_with_radargrid(umbra_sicd, geogrid, opts):
     # Common initializations
     t_start = time.time()
     output_dir = str(opts.output_dir)
