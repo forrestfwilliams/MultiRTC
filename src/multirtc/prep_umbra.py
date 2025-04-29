@@ -32,6 +32,7 @@ class UmbraSICD:
     file_path: Path
     footprint: Polygon
     wavelength: float
+    polarization: str
     shape: tuple[int, int]
     lookside: str  # 'right' or 'left'
     scp_time: float
@@ -107,6 +108,7 @@ class UmbraSICD:
     def from_sarpy_sicd(cls, sicd, file_path):
         center_frequency = sicd.RadarCollection.TxFrequency.Min + sicd.RadarCollection.TxFrequency.Max / 2
         wavelength = isce3.core.speed_of_light / center_frequency
+        polarization = sicd.RadarCollection.RcvChannels[0].TxRcvPolarization.replace(':','')
         lookside = 'right' if sicd.SCPCOA.SideOfTrack == 'R' else 'left'
         footprint = Polygon([(ic.Lon, ic.Lat) for ic in sicd.GeoData.ImageCorners])
 
@@ -131,11 +133,12 @@ class UmbraSICD:
         transform_matrix = cls.calculate_transform_matrix(sicd.PFA, coa_time)
         beta0_coeff = sicd.Radiometric.BetaZeroSFPoly.Coefs
         umbra_sicd = cls(
-            id=sicd.CollectionInfo.CoreName,
+            id=Path(file_path).with_suffix('').name,
             file_path=file_path,
             footprint=footprint,
             shape=(sicd.ImageData.NumRows, sicd.ImageData.NumCols),
             wavelength=wavelength,
+            polarization=polarization,
             lookside=lookside,
             scp_time=scp_time,
             scp_pos=scp_pos,
