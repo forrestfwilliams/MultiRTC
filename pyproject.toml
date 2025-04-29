@@ -21,14 +21,17 @@ classifiers=[
 dependencies = [
     "gdal",
     "numpy",
-    "shapely",
-    "earthaccess",
-    "s1reader",
-    "requests",
-    "urllib3",
-    "lxml",
-    "burst2safe",
     # "isce3", Not on pip
+    "boto3",
+    "requests",
+    "lxml",
+    "shapely",
+    "pyproj",
+    "s1reader",
+    "sarpy",
+    "burst2safe",
+    "tqdm",
+    "hyp3lib",
 ]
 dynamic = ["version", "readme"]
 

@@ -6,16 +6,19 @@ dependencies:
   # For running
   - python
   - pip
-  # OPERA RTC-sourced requirements
   - gdal>=3.0
   - numpy>=1.20
-  - boto3
-  - shapely
-  - s1reader>=0.2.4
   - isce3
+  - boto3
+  - requests
+  - lxml
+  - shapely
+  - pyproj
+  - s1reader>=0.2.4
   - sarpy
-  - earthaccess
   - burst2safe
+  - tqdm
+  - hyp3lib
   # For packaging, and testing
   - setuptools
   - setuptools_scm
