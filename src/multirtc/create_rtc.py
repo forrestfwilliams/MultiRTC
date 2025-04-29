@@ -729,7 +729,7 @@ def umbra_rtc_v1(umbra_sicd, geogrid, opts):
     logger.info(f'elapsed time: {t_end - t_start}')
 
 
-def umbra_rtc(umbra_sicd, geogrid, dem_path):
+def umbra_rtc(umbra_sicd, geogrid, dem_path, output_dir):
     interp_method = isce3.core.DataInterpMethod.BIQUINTIC
     slc_data = umbra_sicd.load_data()
     slc_power = slc_data.real**2 + slc_data.imag**2
@@ -757,8 +757,10 @@ def umbra_rtc(umbra_sicd, geogrid, dem_path):
 
     output = 10 * np.log10(output)
     output[mask == 0] = np.nan
+
+    output_path = output_dir / f'{umbra_sicd.id}_{umbra_sicd.polarization}.tif'
     driver = gdal.GetDriverByName('GTiff')
-    out_ds = driver.Create('tmp.tif', geogrid.width, geogrid.length, 1, gdal.GDT_Float32)
+    out_ds = driver.Create(str(output_path), geogrid.width, geogrid.length, 1, gdal.GDT_Float32)
     # account for pixel as area
     start_x = geogrid.start_x - (geogrid.spacing_x / 2)
     start_y = geogrid.start_y + (geogrid.spacing_y / 2)

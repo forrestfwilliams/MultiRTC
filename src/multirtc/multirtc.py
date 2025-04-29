@@ -2,21 +2,11 @@ import argparse
 from pathlib import Path
 from typing import Optional
 
-import isce3
-
 from multirtc.create_rtc import run_single_job, umbra_rtc
 from multirtc.define_geogrid import generate_geogrids
 from multirtc.prep_burst import prep_burst
 from multirtc.prep_umbra import prep_umbra
 from multirtc.rtc_options import RtcOptions
-
-
-def print_wkt(umbra_sicd):
-    radar_grid = umbra_sicd.as_isce3_radargrid()
-    dem = isce3.geometry.DEMInterpolator()
-    doppler = umbra_sicd.get_doppler_centroid_grid()
-    wkt = isce3.geometry.get_geo_perimeter_wkt(radar_grid, umbra_sicd.orbit, doppler, dem, 3)
-    print(wkt)
 
 
 def opera_rtc_s1_burst(granule: str, resolution: int = 30, work_dir: Optional[Path] = None) -> None:
@@ -57,7 +47,7 @@ def opera_rtc_umbra_sicd(granule: str, resolution: int = 30, work_dir: Optional[
     [d.mkdir(parents=True, exist_ok=True) for d in [input_dir, output_dir]]
     umbra_sicd, dem_path = prep_umbra(granule_path, work_dir=input_dir)
     geogrid = generate_geogrids(umbra_sicd, resolution, rda=False)
-    umbra_rtc(umbra_sicd, geogrid, dem_path)
+    umbra_rtc(umbra_sicd, geogrid, dem_path, output_dir=output_dir)
 
 
 def main():
@@ -67,17 +57,18 @@ def main():
     multirtc umbra_image.ntif --resolution 40
     """
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('platform', choices=['S1', 'UMBRA'], help='Platform to create RTC for')
     parser.add_argument('granule', help='Data granule to create an RTC for.')
     parser.add_argument('--resolution', default=30, type=float, help='Resolution of the output RTC (m)')
     parser.add_argument('--work-dir', type=Path, default=None, help='Working directory for processing')
     args = parser.parse_args()
 
-    if args.granule.endswith('-BURST'):
-        opera_rtc_s1_burst(**args.__dict__)
-    elif 'UMBRA' in args.granule and args.granule.endswith('.nitf'):
-        opera_rtc_umbra_sicd(**args.__dict__)
+    if args.platform == 'S1':
+        opera_rtc_s1_burst(args.granule, args.resolution, args.work_dir)
+    elif args.platform == 'UMBRA':
+        opera_rtc_umbra_sicd(args.granule, args.resolution, args.work_dir)
     else:
-        raise NotImplementedError('Only Sentinel-1 burst processing is supported at this time')
+        raise NotImplementedError('Only Sentinel-1 burst and Umbra processing are supported at this time')
 
 
 if __name__ == '__main__':
