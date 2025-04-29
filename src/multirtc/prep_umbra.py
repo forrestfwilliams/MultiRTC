@@ -108,7 +108,7 @@ class UmbraSICD:
     def from_sarpy_sicd(cls, sicd, file_path):
         center_frequency = sicd.RadarCollection.TxFrequency.Min + sicd.RadarCollection.TxFrequency.Max / 2
         wavelength = isce3.core.speed_of_light / center_frequency
-        polarization = sicd.RadarCollection.RcvChannels[0].TxRcvPolarization.replace(':','')
+        polarization = sicd.RadarCollection.RcvChannels[0].TxRcvPolarization.replace(':', '')
         lookside = 'right' if sicd.SCPCOA.SideOfTrack == 'R' else 'left'
         footprint = Polygon([(ic.Lon, ic.Lat) for ic in sicd.GeoData.ImageCorners])
 
