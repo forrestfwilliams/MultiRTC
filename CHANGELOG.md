@@ -11,3 +11,8 @@ and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 * Initial version
+
+## [0.0.0]
+
+### Added
+* Marking 0th release for CI/CD
