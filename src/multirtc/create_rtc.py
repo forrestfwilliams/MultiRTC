@@ -1,14 +1,20 @@
+import itertools
 import logging
 import os
 import time
+from pathlib import Path
 
 import isce3
 import numpy as np
+import pyproj
 from osgeo import gdal
 from s1reader.s1_burst_slc import Sentinel1BurstSlc
 from scipy import ndimage
+from tqdm import tqdm
 
 from multirtc.rtc_options import RtcOptions
+from multirtc.s1burst_corrections import apply_slc_corrections, compute_correction_lut
+from multirtc.umbra_corrections import save_as_beta0
 
 
 logger = logging.getLogger('rtc_s1')
@@ -24,196 +30,11 @@ LAYER_NAME_RANGE_SLOPE = 'range_slope'
 LAYER_NAME_DEM = 'interpolated_dem'
 
 
-def compute_correction_lut(
-    burst_in,
-    dem_raster,
-    scratch_path,
-    rg_step_meters,
-    az_step_meters,
-    apply_bistatic_delay_correction,
-    apply_static_tropospheric_delay_correction,
-):
-    """
-    Compute lookup table for geolocation correction.
-    Applied corrections are: bistatic delay (azimuth),
-                             static troposphere delay (range)
-
-    Parameters
-    ----------
-    burst_in: Sentinel1BurstSlc
-        Input burst SLC
-    dem_raster: isce3.io.raster
-        DEM to run rdr2geo
-    scratch_path: str
-        Scratch path where the radargrid rasters will be saved
-    rg_step_meters: float
-        LUT spacing in slant range. Unit: meters
-    az_step_meters: float
-        LUT spacing in azimth direction. Unit: meters
-    apply_bistatic_delay_correction: bool
-        Flag to indicate whether the bistatic delay correciton should be applied
-    apply_static_tropospheric_delay_correction: bool
-        Flag to indicate whether the static tropospheric delay correction should be
-        applied
-
-    Returns
-    -------
-    rg_lut, az_lut: isce3.core.LUT2d
-        LUT2d for geolocation correction in slant range and azimuth direction
-    """
-
-    rg_lut = None
-    az_lut = None
-
-    # approximate conversion of az_step_meters from meters to seconds
-    numrow_orbit = burst_in.orbit.position.shape[0]
-    vel_mid = burst_in.orbit.velocity[numrow_orbit // 2, :]
-    spd_mid = np.linalg.norm(vel_mid)
-    pos_mid = burst_in.orbit.position[numrow_orbit // 2, :]
-    alt_mid = np.linalg.norm(pos_mid)
-
-    r = 6371000.0  # geometric mean of WGS84 ellipsoid
-
-    az_step_sec = (az_step_meters * alt_mid) / (spd_mid * r)
-    # Bistatic - azimuth direction
-    bistatic_delay = burst_in.bistatic_delay(range_step=rg_step_meters, az_step=az_step_sec)
-
-    if apply_bistatic_delay_correction:
-        az_lut = isce3.core.LUT2d(
-            bistatic_delay.x_start,
-            bistatic_delay.y_start,
-            bistatic_delay.x_spacing,
-            bistatic_delay.y_spacing,
-            -bistatic_delay.data,
-        )
-
-    if not apply_static_tropospheric_delay_correction:
-        return rg_lut, az_lut
-
-    # Calculate rdr2geo rasters
-    epsg = dem_raster.get_epsg()
-    proj = isce3.core.make_projection(epsg)
-    ellipsoid = proj.ellipsoid
-
-    rdr_grid = burst_in.as_isce3_radargrid(az_step=az_step_sec, rg_step=rg_step_meters)
-
-    grid_doppler = isce3.core.LUT2d()
-
-    # Initialize the rdr2geo object
-    rdr2geo_obj = isce3.geometry.Rdr2Geo(rdr_grid, burst_in.orbit, ellipsoid, grid_doppler, threshold=1.0e-8)
-
-    # Get the rdr2geo raster needed for SET computation
-    topo_output = {
-        f'{scratch_path}/height.rdr': gdal.GDT_Float32,
-        f'{scratch_path}/incidence_angle.rdr': gdal.GDT_Float32,
-    }
-
-    raster_list = []
-    for fname, dtype in topo_output.items():
-        topo_output_raster = isce3.io.Raster(fname, rdr_grid.width, rdr_grid.length, 1, dtype, 'ENVI')
-        raster_list.append(topo_output_raster)
-
-    height_raster, incidence_raster = raster_list
-
-    rdr2geo_obj.topo(
-        dem_raster, x_raster=None, y_raster=None, height_raster=height_raster, incidence_angle_raster=incidence_raster
-    )
-
-    height_raster.close_dataset()
-    incidence_raster.close_dataset()
-
-    # Load height and incidence angle layers
-    height_arr = gdal.Open(f'{scratch_path}/height.rdr', gdal.GA_ReadOnly).ReadAsArray()
-    incidence_angle_arr = gdal.Open(f'{scratch_path}/incidence_angle.rdr', gdal.GA_ReadOnly).ReadAsArray()
-
-    # static troposphere delay - range direction
-    # reference:
-    # Breit et al., 2010, TerraSAR-X SAR Processing and Products,
-    # IEEE Transactions on Geoscience and Remote Sensing, 48(2), 727-740.
-    # DOI: 10.1109/TGRS.2009.2035497
-    zenith_path_delay = 2.3
-    reference_height = 6000.0
-    tropo = zenith_path_delay / np.cos(np.deg2rad(incidence_angle_arr)) * np.exp(-1 * height_arr / reference_height)
-
-    # Prepare the computation results into LUT2d
-    rg_lut = isce3.core.LUT2d(
-        bistatic_delay.x_start, bistatic_delay.y_start, bistatic_delay.x_spacing, bistatic_delay.y_spacing, tropo
-    )
-
-    return rg_lut, az_lut
-
-
-def apply_slc_corrections(
-    burst_in: Sentinel1BurstSlc,
-    path_slc_vrt: str,
-    path_slc_out: str,
-    flag_output_complex: bool = False,
-    flag_thermal_correction: bool = True,
-    flag_apply_abs_rad_correction: bool = True,
-):
-    """Apply thermal correction stored in burst_in. Save the corrected signal
-    back to ENVI format. Preserves the phase when the output is complex
-
-    Parameters
-    ----------
-    burst_in: Sentinel1BurstSlc
-        Input burst to apply the correction
-    path_slc_vrt: str
-        Path to the input burst to apply correction
-    path_slc_out: str
-        Path to the output SLC which the corrections are applied
-    flag_output_complex: bool
-        `path_slc_out` will be in complex number when this is `True`
-        Otherwise, the output will be amplitude only.
-    flag_thermal_correction: bool
-        flag whether or not to apple the thermal correction.
-    flag_apply_abs_rad_correction: bool
-        Flag to apply radiometric calibration
-    """
-
-    # Load the SLC of the burst
-    burst_in.slc_to_vrt_file(path_slc_vrt)
-    slc_gdal_ds = gdal.Open(path_slc_vrt)
-    arr_slc_from = slc_gdal_ds.ReadAsArray()
-
-    # Apply thermal noise correction
-    if flag_thermal_correction:
-        logger.info('    applying thermal noise correction to burst SLC')
-        corrected_image = np.abs(arr_slc_from) ** 2 - burst_in.thermal_noise_lut
-        min_backscatter = 0
-        max_backscatter = None
-        corrected_image = np.clip(corrected_image, min_backscatter, max_backscatter)
-    else:
-        corrected_image = np.abs(arr_slc_from) ** 2
-
-    # Apply absolute radiometric correction
-    if flag_apply_abs_rad_correction:
-        logger.info('    applying absolute radiometric correction to burst SLC')
-        corrected_image = corrected_image / burst_in.burst_calibration.beta_naught**2
-
-    # Output as complex
-    if flag_output_complex:
-        factor_mag = np.sqrt(corrected_image) / np.abs(arr_slc_from)
-        factor_mag[np.isnan(factor_mag)] = 0.0
-        corrected_image = arr_slc_from * factor_mag
-        dtype = gdal.GDT_CFloat32
-    else:
-        dtype = gdal.GDT_Float32
-
-    # Save the corrected image
-    drvout = gdal.GetDriverByName('GTiff')
-    raster_out = drvout.Create(path_slc_out, burst_in.shape[1], burst_in.shape[0], 1, dtype)
-    band_out = raster_out.GetRasterBand(1)
-    band_out.WriteArray(corrected_image)
-    band_out.FlushCache()
-    del band_out
-
-
 def compute_layover_shadow_mask(
     radar_grid: isce3.product.RadarGridParameters,
     orbit: isce3.core.Orbit,
     geogrid_in: isce3.product.GeoGridParameters,
-    burst_in: Sentinel1BurstSlc,
+    slc_obj: Sentinel1BurstSlc,
     dem_raster: isce3.io.Raster,
     filename_out: str,
     output_raster_format: str,
@@ -227,6 +48,7 @@ def compute_layover_shadow_mask(
     numiter_geo2rdr: int = 25,
     memory_mode: isce3.core.GeocodeMemoryMode = None,
     geocode_options=None,
+    doppler=None,
 ):
     """
     Compute the layover/shadow mask and geocode it
@@ -276,18 +98,16 @@ def compute_layover_shadow_mask(
     slantrange_layover_shadow_mask_raster: isce3.io.Raster
         Layover/shadow-mask ISCE3 raster object in radar coordinates
     """
+    if doppler is None:
+        doppler = isce3.core.LUT2d()
 
     # determine the output filename
-    str_datetime = burst_in.sensing_start.strftime('%Y%m%d_%H%M%S.%f')
+    str_datetime = slc_obj.sensing_start.strftime('%Y%m%d_%H%M%S.%f')
 
     # Run topo to get layover/shadow mask
     ellipsoid = isce3.core.Ellipsoid()
-
-    Rdr2Geo = isce3.geometry.Rdr2Geo
-
-    grid_doppler = isce3.core.LUT2d()
-
-    rdr2geo_obj = Rdr2Geo(
+    grid_doppler = doppler
+    rdr2geo_obj = isce3.geometry.Rdr2Geo(
         radar_grid,
         orbit,
         ellipsoid,
@@ -304,7 +124,7 @@ def compute_layover_shadow_mask(
             path_layover_shadow_mask_file, radar_grid.width, radar_grid.length, 1, gdal.GDT_Byte, 'GTiff'
         )
     else:
-        path_layover_shadow_mask = f'layover_shadow_mask_{burst_in.burst_id}_{burst_in.polarization}_{str_datetime}'
+        path_layover_shadow_mask = f'layover_shadow_mask_{str_datetime}'
         slantrange_layover_shadow_mask_raster = isce3.io.Raster(
             path_layover_shadow_mask, radar_grid.width, radar_grid.length, 1, gdal.GDT_Byte, 'MEM'
         )
@@ -355,7 +175,7 @@ def compute_layover_shadow_mask(
     geo = isce3.geocode.GeocodeFloat32()
     geo.orbit = orbit
     geo.ellipsoid = ellipsoid
-    geo.doppler = isce3.core.LUT2d()
+    geo.doppler = doppler
     geo.threshold_geo2rdr = threshold_geo2rdr
     geo.numiter_geo2rdr = numiter_geo2rdr
     geo.data_interpolator = 'NEAREST'
@@ -446,7 +266,11 @@ def save_intermediate_geocode_files(
     lookside,
     wavelength,
     orbit,
+    doppler=None,
 ):
+    if doppler is None:
+        doppler = isce3.core.LUT2d()
+
     # FIXME: Computation of range slope is not merged to ISCE yet
     output_obj_list = []
     layers_nbands = 1
@@ -482,9 +306,9 @@ def save_intermediate_geocode_files(
 
     # TODO review this (Doppler)!!!
     # native_doppler = burst.doppler.lut2d
-    native_doppler = isce3.core.LUT2d()
+    native_doppler = doppler
     native_doppler.bounds_error = False
-    grid_doppler = isce3.core.LUT2d()
+    grid_doppler = doppler
     grid_doppler.bounds_error = False
 
     isce3.geogrid.get_radar_grid(
@@ -519,13 +343,11 @@ def run_single_job(product_id: str, burst: Sentinel1BurstSlc, geogrid, opts: Rtc
     """
     # Common initializations
     t_start = time.time()
+    output_dir = str(opts.output_dir)
+    os.makedirs(output_dir, exist_ok=True)
 
     raster_format = 'GTiff'
     raster_extension = 'tif'
-
-    burst_id = str(burst.burst_id)
-    output_dir = str(opts.output_dir)
-    os.makedirs(output_dir, exist_ok=True)
 
     # Filenames
     temp_slc_path = os.path.join(output_dir, 'slc.vrt')
@@ -536,8 +358,6 @@ def run_single_job(product_id: str, burst: Sentinel1BurstSlc, geogrid, opts: Rtc
     rtc_anf_gamma0_to_sigma0_file = (
         f'{output_dir}/{product_id}_{LAYER_NAME_RTC_ANF_GAMMA0_TO_SIGMA0}.{raster_extension}'
     )
-
-    logger.info('    reading burst SLCs')
     radar_grid = burst.as_isce3_radargrid()
     orbit = burst.orbit
     wavelength = burst.wavelength
@@ -546,7 +366,7 @@ def run_single_job(product_id: str, burst: Sentinel1BurstSlc, geogrid, opts: Rtc
     dem_raster = isce3.io.Raster(opts.dem_path)
     ellipsoid = isce3.core.Ellipsoid()
     zero_doppler = isce3.core.LUT2d()
-    exponent = 1 if (opts.apply_thermal_noise or opts.ads_rad) else 2
+    exponent = 1 if (opts.apply_thermal_noise or opts.apply_ads_rad) else 2
 
     x_snap = geogrid.spacing_x
     y_snap = geogrid.spacing_y
@@ -592,7 +412,7 @@ def run_single_job(product_id: str, burst: Sentinel1BurstSlc, geogrid, opts: Rtc
 
     # Calculate layover/shadow mask
     layover_shadow_mask_file = f'{output_dir}/{product_id}_{LAYER_NAME_LAYOVER_SHADOW_MASK}.{raster_extension}'
-    logger.info(f'    computing layover shadow mask for {burst_id}')
+    logger.info(f'    computing layover shadow mask for {product_id}')
     radar_grid_layover_shadow_mask = radar_grid
     slantrange_layover_shadow_mask_raster = compute_layover_shadow_mask(
         radar_grid_layover_shadow_mask,
@@ -738,3 +558,215 @@ def run_single_job(product_id: str, burst: Sentinel1BurstSlc, geogrid, opts: Rtc
 
     t_end = time.time()
     logger.info(f'elapsed time: {t_end - t_start}')
+
+
+def umbra_rtc_with_radargrid(umbra_sicd, geogrid, opts):
+    # Common initializations
+    t_start = time.time()
+    output_dir = str(opts.output_dir)
+    product_id = umbra_sicd.id
+    os.makedirs(output_dir, exist_ok=True)
+
+    raster_format = 'GTiff'
+    raster_extension = 'tif'
+
+    # Filenames
+    geo_filename = f'{output_dir}/{product_id}.{raster_extension}'
+    nlooks_file = f'{output_dir}/{product_id}_{LAYER_NAME_NUMBER_OF_LOOKS}.{raster_extension}'
+    rtc_anf_file = f'{output_dir}/{product_id}_{opts.layer_name_rtc_anf}.{raster_extension}'
+    rtc_anf_gamma0_to_sigma0_file = (
+        f'{output_dir}/{product_id}_{LAYER_NAME_RTC_ANF_GAMMA0_TO_SIGMA0}.{raster_extension}'
+    )
+    radar_grid = umbra_sicd.as_isce3_radargrid()
+    orbit = umbra_sicd.orbit
+    wavelength = umbra_sicd.wavelength
+    lookside = radar_grid.lookside
+
+    dem_raster = isce3.io.Raster(opts.dem_path)
+    ellipsoid = isce3.core.Ellipsoid()
+    doppler = umbra_sicd.get_doppler_centroid_grid()
+    exponent = 2
+
+    x_snap = geogrid.spacing_x
+    y_snap = geogrid.spacing_y
+    geogrid.start_x = np.floor(float(geogrid.start_x) / x_snap) * x_snap
+    geogrid.start_y = np.ceil(float(geogrid.start_y) / y_snap) * y_snap
+
+    input_filename = save_as_beta0(umbra_sicd, Path(opts.output_dir))
+    input_filename = str(input_filename)
+
+    # geocoding optional arguments
+    geocode_kwargs = {}
+    layover_shadow_mask_geocode_kwargs = {}
+
+    layover_shadow_mask_file = f'{output_dir}/{product_id}_{LAYER_NAME_LAYOVER_SHADOW_MASK}.{raster_extension}'
+    logger.info(f'    computing layover shadow mask for {product_id}')
+    radar_grid_layover_shadow_mask = radar_grid
+    slantrange_layover_shadow_mask_raster = compute_layover_shadow_mask(
+        radar_grid_layover_shadow_mask,
+        orbit,
+        geogrid,
+        umbra_sicd,
+        dem_raster,
+        layover_shadow_mask_file,
+        raster_format,
+        output_dir,
+        shadow_dilation_size=opts.shadow_dilation_size,
+        threshold_rdr2geo=opts.rdr2geo_threshold,
+        numiter_rdr2geo=opts.rdr2geo_numiter,
+        threshold_geo2rdr=opts.geo2rdr_threshold,
+        numiter_geo2rdr=opts.geo2rdr_numiter,
+        memory_mode=opts.memory_mode_isce3,
+        geocode_options=layover_shadow_mask_geocode_kwargs,
+        doppler=doppler,
+    )
+    logger.info(f'file saved: {layover_shadow_mask_file}')
+    if opts.apply_shadow_masking:
+        geocode_kwargs['input_layover_shadow_mask_raster'] = slantrange_layover_shadow_mask_raster
+
+    out_geo_nlooks_obj = isce3.io.Raster(nlooks_file, geogrid.width, geogrid.length, 1, gdal.GDT_Float32, raster_format)
+    out_geo_rtc_obj = isce3.io.Raster(rtc_anf_file, geogrid.width, geogrid.length, 1, gdal.GDT_Float32, raster_format)
+    out_geo_rtc_gamma0_to_sigma0_obj = isce3.io.Raster(
+        rtc_anf_gamma0_to_sigma0_file, geogrid.width, geogrid.length, 1, gdal.GDT_Float32, raster_format
+    )
+    geocode_kwargs['out_geo_rtc_gamma0_to_sigma0'] = out_geo_rtc_gamma0_to_sigma0_obj
+
+    rdr_raster = isce3.io.Raster(input_filename)
+    # Generate output geocoded burst raster
+    geo_raster = isce3.io.Raster(
+        geo_filename, geogrid.width, geogrid.length, rdr_raster.num_bands, gdal.GDT_Float32, raster_format
+    )
+
+    # init Geocode object depending on raster type
+    if rdr_raster.datatype() == gdal.GDT_Float32:
+        geo_obj = isce3.geocode.GeocodeFloat32()
+    elif rdr_raster.datatype() == gdal.GDT_Float64:
+        geo_obj = isce3.geocode.GeocodeFloat64()
+    elif rdr_raster.datatype() == gdal.GDT_CFloat32:
+        geo_obj = isce3.geocode.GeocodeCFloat32()
+    elif rdr_raster.datatype() == gdal.GDT_CFloat64:
+        geo_obj = isce3.geocode.GeocodeCFloat64()
+    else:
+        err_str = 'Unsupported raster type for geocoding'
+        raise NotImplementedError(err_str)
+
+    # init geocode members
+    geo_obj.orbit = orbit
+    geo_obj.ellipsoid = ellipsoid
+    geo_obj.doppler = doppler
+    geo_obj.threshold_geo2rdr = opts.geo2rdr_threshold
+    geo_obj.numiter_geo2rdr = opts.geo2rdr_numiter
+
+    # set data interpolator based on the geocode algorithm
+    if opts.geocode_algorithm_isce3 == isce3.geocode.GeocodeOutputMode.INTERP:
+        geo_obj.data_interpolator = opts.geocode_algorithm_isce3
+
+    geo_obj.geogrid(
+        geogrid.start_x,
+        geogrid.start_y,
+        geogrid.spacing_x,
+        geogrid.spacing_y,
+        geogrid.width,
+        geogrid.length,
+        geogrid.epsg,
+    )
+
+    geo_obj.geocode(
+        radar_grid=radar_grid,
+        input_raster=rdr_raster,
+        output_raster=geo_raster,
+        dem_raster=dem_raster,
+        output_mode=opts.geocode_algorithm_isce3,
+        geogrid_upsampling=opts.geogrid_upsampling,
+        flag_apply_rtc=opts.apply_rtc,
+        input_terrain_radiometry=opts.input_terrain_radiometry_isce3,
+        output_terrain_radiometry=opts.terrain_radiometry_isce3,
+        exponent=exponent,
+        rtc_min_value_db=opts.rtc_min_value_db,
+        rtc_upsampling=opts.rtc_upsampling,
+        rtc_algorithm=opts.rtc_algorithm_isce3,
+        abs_cal_factor=opts.abs_cal_factor,
+        flag_upsample_radar_grid=opts.upsample_radar_grid,
+        clip_min=opts.clip_min,
+        clip_max=opts.clip_max,
+        out_geo_nlooks=out_geo_nlooks_obj,
+        out_geo_rtc=out_geo_rtc_obj,
+        rtc_area_beta_mode=opts.rtc_area_beta_mode_isce3,
+        # out_geo_rtc_gamma0_to_sigma0=out_geo_rtc_gamma0_to_sigma0_obj,
+        input_rtc=None,
+        output_rtc=None,
+        dem_interp_method=opts.dem_interpolation_method_isce3,
+        memory_mode=opts.memory_mode_isce3,
+        **geocode_kwargs,
+    )
+
+    del geo_raster
+
+    out_geo_nlooks_obj.close_dataset()
+    del out_geo_nlooks_obj
+
+    out_geo_rtc_obj.close_dataset()
+    del out_geo_rtc_obj
+
+    out_geo_rtc_gamma0_to_sigma0_obj.close_dataset()
+    del out_geo_rtc_gamma0_to_sigma0_obj
+
+    radar_grid_file_dict = {}
+    save_intermediate_geocode_files(
+        geogrid,
+        opts.dem_interpolation_method_isce3,
+        product_id,
+        output_dir,
+        raster_extension,
+        dem_raster,
+        radar_grid_file_dict,
+        lookside,
+        wavelength,
+        orbit,
+        doppler=doppler,
+    )
+    t_end = time.time()
+    logger.info(f'elapsed time: {t_end - t_start}')
+
+
+def umbra_rtc(umbra_sicd, geogrid, dem_path, output_dir):
+    interp_method = isce3.core.DataInterpMethod.BIQUINTIC
+    slc_data = umbra_sicd.load_data()
+    slc_power = slc_data.real**2 + slc_data.imag**2
+    slc_lut = isce3.core.LUT2d(np.arange(slc_data.shape[1]), np.arange(slc_data.shape[0]), slc_power, interp_method)
+    ecef = pyproj.CRS(4978)  # ECEF on WGS84 Ellipsoid
+    lla = pyproj.CRS(4979)  # WGS84
+    lla2ecef = pyproj.Transformer.from_crs(lla, ecef, always_xy=True)
+    dem_raster = isce3.io.Raster(str(dem_path))
+    dem = isce3.geometry.DEMInterpolator()
+    dem.load_dem(dem_raster)
+    dem.interp_method = interp_method
+    output = np.zeros((geogrid.length, geogrid.width), dtype=np.complex64)
+    mask = np.zeros((geogrid.length, geogrid.width), dtype=bool)
+
+    n_iters = geogrid.width * geogrid.length
+    for i, j in tqdm(itertools.product(range(geogrid.width), range(geogrid.length)), total=n_iters):
+        x = geogrid.start_x + (i * geogrid.spacing_x)
+        y = geogrid.start_y + (j * geogrid.spacing_y)
+        hae = dem.interpolate_lonlat(np.deg2rad(x), np.deg2rad(y))  # ISCE3 expects lat/lon to be in radians!
+        ecef_x, ecef_y, ecef_z = lla2ecef.transform(x, y, hae)
+        row, col = umbra_sicd.geo2rowcol(np.array([(ecef_x, ecef_y, ecef_z)]))[0]
+        if slc_lut.contains(row, col):
+            output[j, i] = slc_lut.eval(row, col)
+            mask[j, i] = 1
+
+    output = 10 * np.log10(output)
+    output[mask == 0] = np.nan
+
+    output_path = output_dir / f'{umbra_sicd.id}_{umbra_sicd.polarization}.tif'
+    driver = gdal.GetDriverByName('GTiff')
+    out_ds = driver.Create(str(output_path), geogrid.width, geogrid.length, 1, gdal.GDT_Float32)
+    # account for pixel as area
+    start_x = geogrid.start_x - (geogrid.spacing_x / 2)
+    start_y = geogrid.start_y + (geogrid.spacing_y / 2)
+    out_ds.SetGeoTransform([start_x, geogrid.spacing_x, 0, start_y, 0, geogrid.spacing_y])
+    out_ds.SetProjection(pyproj.CRS(4326).to_wkt())
+    out_ds.GetRasterBand(1).WriteArray(output)
+    out_ds.GetRasterBand(1).SetNoDataValue(np.nan)
+    out_ds.SetMetadata({'AREA_OR_POINT': 'Area'})
+    out_ds = None

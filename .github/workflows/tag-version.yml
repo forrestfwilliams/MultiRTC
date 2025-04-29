@@ -8,9 +8,9 @@ on:
 jobs:
   call-bump-version-workflow:
     # Docs: https://github.com/ASFHyP3/actions
-    uses: ASFHyP3/actions/.github/workflows/reusable-bump-version.yml@v0.14.0
+    uses: ASFHyP3/actions/.github/workflows/reusable-bump-version.yml@v0.18.1
     with:
-      user: tools-bot
-      email: UAF-asf-apd@alaska.edu
+      user: forrest-bot
+      email: ffwilliams2@alaska.edu
     secrets:
-      USER_TOKEN: ${{ secrets.TOOLS_BOT_PAK }}
+      USER_TOKEN: ${{ secrets.FORREST_BOT_PAK }}

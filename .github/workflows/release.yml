@@ -8,11 +8,11 @@ on:
 jobs:
   call-release-workflow:
     # Docs: https://github.com/ASFHyP3/actions
-    uses: ASFHyP3/actions/.github/workflows/reusable-release.yml@v0.14.0
+    uses: ASFHyP3/actions/.github/workflows/reusable-release.yml@v0.18.1
     with:
       release_prefix: MultiRTC
       release_branch: main
       develop_branch: develop
       sync_pr_label: actions-bot
     secrets:
-      USER_TOKEN: ${{ secrets.TOOLS_BOT_PAK }}
+      USER_TOKEN: ${{ secrets.FORREST_BOT_PAK }}

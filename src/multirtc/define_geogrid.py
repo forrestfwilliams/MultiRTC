@@ -1,5 +1,12 @@
 import isce3
 import numpy as np
+import pyproj
+from shapely.geometry import Polygon
+
+
+ECEF = pyproj.CRS(4978)
+LLA = pyproj.CRS(4979)
+ECEF2LLA = pyproj.Transformer.from_crs(ECEF, LLA, always_xy=True)
 
 
 def get_point_epsg(lat, lon):
@@ -99,31 +106,35 @@ def snap_geogrid(geogrid, x_snap, y_snap):
     return geogrid
 
 
-def generate_geogrids(burst, x_spacing, y_spacing, x_snap, y_snap, output_epsg=None):
+def get_geogrid_poly(geogrid):
+    new_maxx = geogrid.start_x + (geogrid.width * geogrid.spacing_x)
+    new_miny = geogrid.start_y + (geogrid.length * geogrid.spacing_y)
+    points = [
+        [geogrid.start_x, geogrid.start_y],
+        [geogrid.start_x, new_miny],
+        [new_maxx, new_miny],
+        [new_maxx, geogrid.start_y],
+    ]
+    poly = Polygon(points)
+    return poly
+
+
+def generate_geogrids(slc_obj, resolution: int, epsg: int = None, rda: bool = True):
     """
-    Compute frame and bursts geogrids
-
-    Parameters
-    ----------
-    bursts: list[s1reader.s1_burst_slc.Sentinel1BurstSlc]
-        List of S-1 burst SLC objects
-    opts: RtcOptions
-
-    Returns
-    -------
-    geogrid_all_snapped: isce3.product.GeoGridParameters
-        Mosaic geogrid
-    geogrids_dict: dict
-        Dict containing bursts' geogrids indexed by burst_id
+    Compute the slc geogrid
     """
-    if output_epsg is None:
-        output_epsg = get_point_epsg(burst.center.y, burst.center.x)
-    epsg_bursts = output_epsg
-    y_spacing_negative = -1 * np.abs(y_spacing)
+    x_spacing = resolution
+    y_spacing = -1 * np.abs(resolution)
+    if epsg is None:
+        epsg = get_point_epsg(slc_obj.center.y, slc_obj.center.x)
 
-    radar_grid = burst.as_isce3_radargrid()
-    geogrid = isce3.product.bbox_to_geogrid(
-        radar_grid, burst.orbit, isce3.core.LUT2d(), x_spacing, y_spacing_negative, epsg_bursts
-    )
-    geogrid_snapped = snap_geogrid(geogrid, x_snap, y_snap)
+    if rda:
+        radar_grid = slc_obj.as_isce3_radargrid()
+        geogrid = isce3.product.bbox_to_geogrid(
+            radar_grid, slc_obj.orbit, isce3.core.LUT2d(), x_spacing, y_spacing, epsg
+        )
+    else:
+        geogrid = slc_obj.get_geogrid(x_spacing, y_spacing)
+
+    geogrid_snapped = snap_geogrid(geogrid, geogrid.spacing_x, geogrid.spacing_y)
     return geogrid_snapped

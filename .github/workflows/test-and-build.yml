@@ -1,4 +1,4 @@
-name: Test and build
+name: Test
 
 on:
   push:
@@ -13,25 +13,8 @@ on:
 jobs:
   call-pytest-workflow:
     # Docs: https://github.com/ASFHyP3/actions
-    uses: ASFHyP3/actions/.github/workflows/reusable-pytest.yml@v0.14.0
+    uses: ASFHyP3/actions/.github/workflows/reusable-pytest.yml@v0.18.1
     with:
-      local_package_name: hyp3_opera_rtc
+      local_package_name: mulitrtc
       python_versions: >-
-        ["3.9"]
-
-  # TODO: re-enable container building when OPERA containers are public
-  # call-version-info-workflow:
-  #   # Docs: https://github.com/ASFHyP3/actions
-  #   uses: ASFHyP3/actions/.github/workflows/reusable-version-info.yml@v0.11.0
-  #
-  # call-docker-ghcr-workflow:
-  #   needs: call-version-info-workflow
-  #   # Docs: https://github.com/ASFHyP3/actions
-  #   uses: ASFHyP3/actions/.github/workflows/reusable-docker-ghcr.yml@v0.11.0
-  #   with:
-  #     version_tag: ${{ needs.call-version-info-workflow.outputs.version_tag }}
-  #     release_branch: main
-  #     develop_branch: develop
-  #     user: tools-bot
-  #   secrets:
-  #     USER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        ["3.9", "3.10", "3.11", "3.12"]
