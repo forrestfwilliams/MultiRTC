@@ -22,7 +22,7 @@ def opera_rtc_s1_burst(granule: str, resolution: int = 30, work_dir: Optional[Pa
     input_dir = work_dir / 'input'
     output_dir = work_dir / 'output'
     [d.mkdir(parents=True, exist_ok=True) for d in [input_dir, output_dir]]
-    
+
     burst, dem_path = prep_burst(granule, work_dir=input_dir)
     opts = RtcOptions(dem_path=str(dem_path), output_dir=str(output_dir), resolution=resolution)
     geogrid = generate_geogrids(burst, opts.resolution)
