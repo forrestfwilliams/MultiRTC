@@ -1,4 +1,4 @@
-name: Test and build
+name: Test
 
 on:
   push:
@@ -15,6 +15,6 @@ jobs:
     # Docs: https://github.com/ASFHyP3/actions
     uses: ASFHyP3/actions/.github/workflows/reusable-pytest.yml@v0.18.1
     with:
-      local_package_name: hyp3_opera_rtc
+      local_package_name: mulitrtc
       python_versions: >-
         ["3.9", "3.10", "3.11", "3.12"]
