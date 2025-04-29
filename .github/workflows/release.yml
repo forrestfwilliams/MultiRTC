@@ -15,4 +15,4 @@ jobs:
       develop_branch: develop
       sync_pr_label: actions-bot
     secrets:
-      USER_TOKEN: ${{ secrets.TOOLS_BOT_PAK }}
+      USER_TOKEN: ${{ secrets.FORREST_BOT_PAK }}
