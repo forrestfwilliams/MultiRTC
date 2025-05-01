@@ -1,4 +1,3 @@
-import argparse
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -7,8 +6,6 @@ from typing import Optional
 import isce3
 import numpy as np
 import pyproj
-
-# from numpy.polynomial.polynomial import polyval
 from sarpy.io.complex.sicd import SICDReader
 from shapely.geometry import Polygon
 
@@ -233,24 +230,9 @@ class UmbraSICD:
             spacing_y=float(y_spacing),
             length=int(length),
             width=int(width),
-            # epsg=4979,
             epsg=4326,
         )
         return geogrid
-
-    def calculate_range_rangerate_arrays(self):
-        rows = np.arange(0, self.shape[0], step=50)
-        cols = np.arange(0, self.shape[1], step=50)
-        ranges = np.zeros((rows.size, cols.size))
-        range_rates = np.zeros((rows.size, cols.size))
-        for i, r in enumerate(rows):
-            for j, c in enumerate(cols):
-                rc = np.array([r, c])
-                rgaz = (rc - self.grid_shift[None, :]) * self.grid_mult[None, :]
-                rrdot = np.dot(self.transform_matrix, rgaz.T) + self.rrdot_offset[:, None]
-                ranges[i, j] = rrdot[0]
-                range_rates[i, j] = rrdot[1]
-        return ranges, range_rates
 
 
 def prep_umbra(granule_path: Path, work_dir: Optional[Path] = None) -> Path:
@@ -269,22 +251,3 @@ def prep_umbra(granule_path: Path, work_dir: Optional[Path] = None) -> Path:
     dem_path = work_dir / 'dem.tif'
     dem.download_opera_dem_for_footprint(dem_path, umbra_sicd.footprint)
     return umbra_sicd, dem_path
-
-
-def main():
-    """Prep SLC entrypoint.
-
-    Example command:
-    prep_burst CR-28_2024-12-03-18-21-21_UMBRA-10_SICD_MM.nitf
-    """
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('granule', help='Umbra SICD to load data for.')
-    parser.add_argument('--work-dir', default=None, help='Working directory for processing')
-
-    args = parser.parse_args()
-
-    prep_umbra(**args.__dict__)
-
-
-if __name__ == '__main__':
-    main()

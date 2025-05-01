@@ -1,4 +1,3 @@
-import argparse
 from pathlib import Path
 from shutil import make_archive
 from typing import Optional
@@ -61,22 +60,3 @@ def prep_burst(granule: str, work_dir: Optional[Path] = None) -> Path:
     dem.download_opera_dem_for_footprint(dem_path, granule_bbox)
     burst = s1reader.load_bursts(str(granule_path), str(orbit_path), 1, 'VV')[0]
     return burst, dem_path
-
-
-def main():
-    """Prep SLC entrypoint.
-
-    Example command:
-    prep_burst S1_136231_IW2_20200604T022312_VV_7C85-BURST
-    """
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('granule', help='S1 burst granule to load data for.')
-    parser.add_argument('--work-dir', default=None, help='Working directory for processing')
-
-    args = parser.parse_args()
-
-    prep_burst(**args.__dict__)
-
-
-if __name__ == '__main__':
-    main()
