@@ -2,7 +2,6 @@ import itertools
 import logging
 import os
 import time
-from pathlib import Path
 
 import isce3
 import numpy as np
