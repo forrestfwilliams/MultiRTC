@@ -14,7 +14,6 @@ from tqdm import tqdm
 
 from multirtc.rtc_options import RtcOptions
 from multirtc.s1burst_corrections import apply_slc_corrections, compute_correction_lut
-from multirtc.umbra_corrections import save_as_beta0
 
 
 logger = logging.getLogger('rtc_s1')
@@ -592,7 +591,8 @@ def umbra_rtc_with_radargrid(umbra_sicd, geogrid, opts):
     geogrid.start_x = np.floor(float(geogrid.start_x) / x_snap) * x_snap
     geogrid.start_y = np.ceil(float(geogrid.start_y) / y_snap) * y_snap
 
-    input_filename = save_as_beta0(umbra_sicd, Path(opts.output_dir))
+    # input_filename = save_as_beta0(umbra_sicd, Path(opts.output_dir))
+    input_filename = 'beta0.tif'
     input_filename = str(input_filename)
 
     # geocoding optional arguments
