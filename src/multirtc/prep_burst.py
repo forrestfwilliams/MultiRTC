@@ -50,10 +50,7 @@ def prep_burst(granule: str, work_dir: Optional[Path] = None) -> Path:
     else:
         granule_path = work_dir / list(work_dir.glob('S1*.zip'))[0].name
 
-    if len(list(work_dir.glob('*.EOF'))) == 0:
-        orbit_path = orbit.get_orbit(granule, save_dir=work_dir)
-    else:
-        orbit_path = work_dir / list(work_dir.glob('*.EOF'))[0].name
+    orbit_path = orbit.get_orbit(granule_path.with_suffix('').name, save_dir=work_dir)
 
     dem_path = work_dir / 'dem.tif'
     granule_bbox = get_s1_granule_bbox(granule_path)
