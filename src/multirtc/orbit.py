@@ -74,5 +74,5 @@ def get_orbit(scene: str, save_dir: Path):
     if orbit_path.exists():
         return orbit_path
 
-    download_file(url, orbit_path)
+    download_file(url, orbit_path.parent)
     return orbit_path

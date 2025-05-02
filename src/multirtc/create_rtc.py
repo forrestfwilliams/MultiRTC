@@ -2,7 +2,6 @@ import itertools
 import logging
 import os
 import time
-from pathlib import Path
 
 import isce3
 import numpy as np
@@ -14,7 +13,6 @@ from tqdm import tqdm
 
 from multirtc.rtc_options import RtcOptions
 from multirtc.s1burst_corrections import apply_slc_corrections, compute_correction_lut
-from multirtc.umbra_corrections import save_as_beta0
 
 
 logger = logging.getLogger('rtc_s1')
@@ -592,7 +590,8 @@ def umbra_rtc_with_radargrid(umbra_sicd, geogrid, opts):
     geogrid.start_x = np.floor(float(geogrid.start_x) / x_snap) * x_snap
     geogrid.start_y = np.ceil(float(geogrid.start_y) / y_snap) * y_snap
 
-    input_filename = save_as_beta0(umbra_sicd, Path(opts.output_dir))
+    # input_filename = save_as_beta0(umbra_sicd, Path(opts.output_dir))
+    input_filename = 'beta0.tif'
     input_filename = str(input_filename)
 
     # geocoding optional arguments
@@ -731,9 +730,10 @@ def umbra_rtc_with_radargrid(umbra_sicd, geogrid, opts):
 
 def umbra_rtc(umbra_sicd, geogrid, dem_path, output_dir):
     interp_method = isce3.core.DataInterpMethod.BIQUINTIC
-    slc_data = umbra_sicd.load_data()
-    slc_power = slc_data.real**2 + slc_data.imag**2
-    slc_lut = isce3.core.LUT2d(np.arange(slc_data.shape[1]), np.arange(slc_data.shape[0]), slc_power, interp_method)
+    sigma0_data = umbra_sicd.load_corrected_data('sigma0')
+    slc_lut = isce3.core.LUT2d(
+        np.arange(sigma0_data.shape[1]), np.arange(sigma0_data.shape[0]), sigma0_data, interp_method
+    )
     ecef = pyproj.CRS(4978)  # ECEF on WGS84 Ellipsoid
     lla = pyproj.CRS(4979)  # WGS84
     lla2ecef = pyproj.Transformer.from_crs(lla, ecef, always_xy=True)
