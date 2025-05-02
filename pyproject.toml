@@ -48,7 +48,6 @@ Homepage = "https://github.com/forrestfwilliams/multirtc"
 Documentation = "https://github.com/forrestfwilliams/multirtc"
 
 [project.scripts]
-prep_burst = "multirtc.prep_burst:main"
 multirtc = "multirtc.multirtc:main"
 
 [tool.pytest.ini_options]
