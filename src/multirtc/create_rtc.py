@@ -732,7 +732,9 @@ def umbra_rtc_with_radargrid(umbra_sicd, geogrid, opts):
 def umbra_rtc(umbra_sicd, geogrid, dem_path, output_dir):
     interp_method = isce3.core.DataInterpMethod.BIQUINTIC
     sigma0_data = umbra_sicd.load_corrected_data('sigma0')
-    slc_lut = isce3.core.LUT2d(np.arange(sigma0_data.shape[1]), np.arange(sigma0_data.shape[0]), sigma0_data, interp_method)
+    slc_lut = isce3.core.LUT2d(
+        np.arange(sigma0_data.shape[1]), np.arange(sigma0_data.shape[0]), sigma0_data, interp_method
+    )
     ecef = pyproj.CRS(4978)  # ECEF on WGS84 Ellipsoid
     lla = pyproj.CRS(4979)  # WGS84
     lla2ecef = pyproj.Transformer.from_crs(lla, ecef, always_xy=True)
