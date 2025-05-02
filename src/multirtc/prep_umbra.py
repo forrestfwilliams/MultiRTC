@@ -6,6 +6,7 @@ from typing import Optional
 import isce3
 import numpy as np
 import pyproj
+from numpy.polynomial.polynomial import polyval2d
 from sarpy.io.complex.sicd import SICDReader
 from shapely.geometry import Polygon
 
@@ -30,8 +31,9 @@ class UmbraSICD:
     footprint: Polygon
     wavelength: float
     polarization: str
-    shape: tuple[int, int]
     lookside: str  # 'right' or 'left'
+    shape: tuple[int, int]
+    scp_index: tuple[int, int]
     scp_time: float
     scp_pos: np.ndarray
     center: Point
@@ -46,12 +48,7 @@ class UmbraSICD:
     transform_matrix_inv: np.ndarray
     orbit: isce3.core.Orbit
     beta0_coeff: np.ndarray
-
-    def load_data(self):
-        """Load data from the UMBRA SICD file."""
-        reader = SICDReader(str(self.file_path))
-        data = reader[:, :]
-        return data
+    sigma0_coeff: np.ndarray
 
     @staticmethod
     def calculate_orbit(sensing_start, pos_arp, vel_arp):
@@ -129,6 +126,7 @@ class UmbraSICD:
         rrdot_offset = cls.calculate_range_range_rate_offset(scp_pos, arp_pos, arp_vel, coa_time)
         transform_matrix = cls.calculate_transform_matrix(sicd.PFA, coa_time)
         beta0_coeff = sicd.Radiometric.BetaZeroSFPoly.Coefs
+        sigma0_coeff = sicd.Radiometric.SigmaZeroSFPoly.Coefs
         umbra_sicd = cls(
             id=Path(file_path).with_suffix('').name,
             file_path=file_path,
@@ -137,6 +135,7 @@ class UmbraSICD:
             wavelength=wavelength,
             polarization=polarization,
             lookside=lookside,
+            scp_index=(sicd.ImageData.SCPPixel.Row, sicd.ImageData.SCPPixel.Col),
             scp_time=scp_time,
             scp_pos=scp_pos,
             center=Point(sicd.GeoData.SCP.LLH.Lon, sicd.GeoData.SCP.LLH.Lat),
@@ -151,6 +150,7 @@ class UmbraSICD:
             transform_matrix_inv=np.linalg.inv(transform_matrix),
             orbit=orbit,
             beta0_coeff=beta0_coeff,
+            sigma0_coeff=sigma0_coeff,
         )
         return umbra_sicd
 
@@ -233,6 +233,38 @@ class UmbraSICD:
             epsg=4326,
         )
         return geogrid
+
+    def get_xrow_ycol(self) -> np.ndarray:
+        """Calculate xrow and ycol for the umbra_sicd."""
+        irow = np.tile(np.arange(self.shape[0]), (self.shape[1], 1)).T
+        irow -= self.scp_index[0]
+        xrow = irow * self.grid_mult[0]
+
+        icol = np.tile(np.arange(self.shape[1]), (self.shape[0], 1))
+        icol -= self.scp_index[1]
+        ycol = icol * self.grid_mult[1]
+        return xrow, ycol
+
+    def load_data(self):
+        """Load data from the UMBRA SICD file."""
+        reader = SICDReader(str(self.file_path))
+        data = reader[:, :]
+        return data
+
+    def load_corrected_data(self, correction='sigma0'):
+        """Load data with a specified correction"""
+        if correction == 'sigma0':
+            coeff = self.sigma0_coeff
+        elif correction == 'beta0':
+            coeff = self.beta0_coeff
+        else:
+            raise ValueError(f'Unknown correction type: {correction}')
+        xrow, ycol = self.get_xrow_ycol()
+        scale_factor = polyval2d(xrow, ycol, coeff)
+        data = self.load_data()
+        power = data.real**2 + data.imag**2
+        corrected = power * scale_factor
+        return corrected
 
 
 def prep_umbra(granule_path: Path, work_dir: Optional[Path] = None) -> Path:
