@@ -97,20 +97,17 @@ def filter_valid_data(cr_df, data):
     cr_df = cr_df[cr_df['has_data']]
     cr_df.drop('has_data', axis=1, inplace=True)
     cr_df = cr_df.reset_index(drop=True)
+    cr_df = cr_df.loc[cr_df['slen'] > 0.8].reset_index(drop=True)  # excluding SWOT CRs (0.7 m as a side length)
     return cr_df
 
 
-def filter_orientation(cr_df, direction):
-    # selecting CRs according to orbit direction
-    if direction == 'DESC':
-        # only east-looking CRs (for right-looking descending)
-        cr_df = cr_df[cr_df['azm'] > 340].reset_index(drop=True)
-    elif direction == 'ASC':
-        # only west-looking CRs (for right-looking ascending)
-        cr_df = cr_df[cr_df['azm'] < 200].reset_index(drop=True)
-    else:
-        raise ValueError(f'Invalid direction: {direction}. Use "ASC" or "DESC".')
-    cr_df = cr_df.loc[cr_df['slen'] > 0.8].reset_index(drop=True)  # excluding SWOT CRs (0.7 m as a side length)
+def filter_orientation(cr_df, azimuth_angle, margin=60):
+    valid = []
+    for i, row in cr_df.iterrows():
+        angle_diff = row['azm'] - azimuth_angle
+        angle_diff = angle_diff + 360 if angle_diff < -180 else np.abs(angle_diff)
+        valid.append(angle_diff <= margin)
+    cr_df = cr_df[np.array(valid)].reset_index(drop=True)
     return cr_df
 
 
@@ -227,12 +224,20 @@ def cr_spread(data):
     return np.round(np.nanstd(data) / np.sqrt(np.size(data)), 3)
 
 
-def plot_ale(cr_df, outdir, fileprefix):
+def plot_ale(cr_df, azmangle, outdir, fileprefix):
     east_ale = cr_df['easting_ale']
     north_ale = cr_df['northing_ale']
     ale = cr_df['ale']
+    los = np.deg2rad(90 - azmangle + 180)
     fig, ax = plt.subplots(figsize=(8, 8))
     ax.scatter(east_ale, north_ale, s=20, c='k', alpha=0.6, marker='o')
+    ax.annotate(
+        'LOS',
+        xytext=(np.cos(los) * 10, np.sin(los) * 10),
+        xy=(0, 0),
+        arrowprops=dict(edgecolor='darkblue', arrowstyle='<-'),
+        color='darkblue',
+    )
     ax.grid(True)
     ax.set_xlim(-15.25, 15.25)
     ax.set_ylim(-15.25, 15.25)
@@ -248,7 +253,7 @@ def plot_ale(cr_df, outdir, fileprefix):
     plt.savefig(outdir / f'{fileprefix}_ale.png', dpi=300, bbox_inches='tight', transparent=True)
 
 
-def ale(filepath, date, direction, outdir, fileprefix):
+def ale(filepath, date, azmangle, outdir, fileprefix):
     outdir.mkdir(parents=True, exist_ok=True)
     ds = gdal.Open(str(filepath))
     data = ds.GetRasterBand(1).ReadAsArray()
@@ -268,7 +273,7 @@ def ale(filepath, date, direction, outdir, fileprefix):
     cr_df = get_cr_df(bounds, epsg, date, outdir)
     cr_df = add_image_location(cr_df, epsg, x_start, y_start, x_spacing, y_spacing, bounds)
     cr_df = filter_valid_data(cr_df, data)
-    cr_df = filter_orientation(cr_df, direction)
+    cr_df = filter_orientation(cr_df, azmangle)
     cr_df = cr_df.assign(yloc_cr=np.nan, xloc_cr=np.nan)
     plot_crs_on_image(cr_df, data, outdir, fileprefix)
     for idx, cr in cr_df.iterrows():
@@ -279,7 +284,7 @@ def ale(filepath, date, direction, outdir, fileprefix):
     cr_df['northing_ale'] = (cr_df['yloc_cr'] - cr_df['yloc_floats']) * y_spacing
     cr_df['ale'] = np.sqrt(cr_df['northing_ale'] ** 2 + cr_df['easting_ale'] ** 2)
     cr_df.to_csv(outdir / (fileprefix + '_ale.csv'), index=False)
-    plot_ale(cr_df, outdir, fileprefix)
+    plot_ale(cr_df, azmangle, outdir, fileprefix)
 
 
 def main():
@@ -289,7 +294,7 @@ def main():
     parser = ArgumentParser(description='Absolute Location Error Estimation.')
     parser.add_argument('filepath', type=str, help='Path to the file to be processed')
     parser.add_argument('date', type=str, help='Date of the image collection (YYYY-MM-DD)')
-    parser.add_argument('direction', choices=['ASC', 'DESC'], help='Direction of the image collection')
+    parser.add_argument('azmangle', type=int, help='Azimuth angle of the image (clockwise from North in degrees)')
     parser.add_argument('outdir', type=str, help='Directory to save the results')
     parser.add_argument(
         '--fileprefix', type=str, help='Prefix for the output filenames (default: input filename)', default=None
@@ -297,12 +302,13 @@ def main():
     args = parser.parse_args()
     args.filepath = Path(args.filepath)
     args.date = datetime.strptime(args.date, '%Y-%m-%d')
+    assert 0 <= args.azmangle <= 360, f'Azimuth angle {args.azmangle} is out of range [0, 360].'
     args.outdir = Path(args.outdir)
     if args.fileprefix is None:
         args.fileprefix = Path(args.filepath).stem
     assert args.filepath.exists(), f'File {args.filepath} does not exist.'
 
-    ale(args.filepath, args.date, args.direction, args.outdir, args.fileprefix)
+    ale(args.filepath, args.date, args.azmangle, args.outdir, args.fileprefix)
 
 
 if __name__ == '__main__':
