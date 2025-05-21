@@ -101,7 +101,7 @@ def filter_valid_data(cr_df, data):
     return cr_df
 
 
-def filter_orientation(cr_df, azimuth_angle, margin=60):
+def filter_orientation(cr_df, azimuth_angle, margin=135):
     valid = []
     for i, row in cr_df.iterrows():
         angle_diff = row['azm'] - azimuth_angle
@@ -228,7 +228,7 @@ def plot_ale(cr_df, azmangle, outdir, fileprefix):
     east_ale = cr_df['easting_ale']
     north_ale = cr_df['northing_ale']
     ale = cr_df['ale']
-    los = np.deg2rad(90 - azmangle + 180)
+    los = np.deg2rad(90 - azmangle)
     fig, ax = plt.subplots(figsize=(8, 8))
     ax.scatter(east_ale, north_ale, s=20, c='k', alpha=0.6, marker='o')
     ax.annotate(
