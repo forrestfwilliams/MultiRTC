@@ -32,7 +32,6 @@ def compute_layover_shadow_mask(
     radar_grid: isce3.product.RadarGridParameters,
     orbit: isce3.core.Orbit,
     geogrid_in: isce3.product.GeoGridParameters,
-    slc_obj: Sentinel1BurstSlc,
     dem_raster: isce3.io.Raster,
     filename_out: str,
     output_raster_format: str,
@@ -59,8 +58,6 @@ def compute_layover_shadow_mask(
         Orbit defining radar motion on input path
     geogrid_in: isce3.product.GeoGridParameters
         Geogrid to geocode the layover/shadow mask in radar grid
-    burst_in: Sentinel1BurstSlc
-        Input burst
     geogrid_in: isce3.product.GeoGridParameters
         Geogrid to geocode the layover/shadow mask in radar grid
     dem_raster: isce3.io.Raster
@@ -99,9 +96,6 @@ def compute_layover_shadow_mask(
     if doppler is None:
         doppler = isce3.core.LUT2d()
 
-    # determine the output filename
-    str_datetime = slc_obj.sensing_start.strftime('%Y%m%d_%H%M%S.%f')
-
     # Run topo to get layover/shadow mask
     ellipsoid = isce3.core.Ellipsoid()
     grid_doppler = doppler
@@ -122,9 +116,8 @@ def compute_layover_shadow_mask(
             path_layover_shadow_mask_file, radar_grid.width, radar_grid.length, 1, gdal.GDT_Byte, 'GTiff'
         )
     else:
-        path_layover_shadow_mask = f'layover_shadow_mask_{str_datetime}'
         slantrange_layover_shadow_mask_raster = isce3.io.Raster(
-            path_layover_shadow_mask, radar_grid.width, radar_grid.length, 1, gdal.GDT_Byte, 'MEM'
+            'layover_shadow_mask', radar_grid.width, radar_grid.length, 1, gdal.GDT_Byte, 'MEM'
         )
 
     rdr2geo_obj.topo(dem_raster, layover_shadow_raster=slantrange_layover_shadow_mask_raster)
@@ -416,7 +409,6 @@ def run_single_job(product_id: str, burst: Sentinel1BurstSlc, geogrid, opts: Rtc
         radar_grid_layover_shadow_mask,
         orbit,
         geogrid,
-        burst,
         dem_raster,
         layover_shadow_mask_file,
         raster_format,
@@ -558,11 +550,11 @@ def run_single_job(product_id: str, burst: Sentinel1BurstSlc, geogrid, opts: Rtc
     logger.info(f'elapsed time: {t_end - t_start}')
 
 
-def umbra_rtc_with_radargrid(umbra_sicd, geogrid, opts):
+def capella_rtc(capella_sicd, geogrid, opts):
     # Common initializations
     t_start = time.time()
     output_dir = str(opts.output_dir)
-    product_id = umbra_sicd.id
+    product_id = capella_sicd.id
     os.makedirs(output_dir, exist_ok=True)
 
     raster_format = 'GTiff'
@@ -575,14 +567,14 @@ def umbra_rtc_with_radargrid(umbra_sicd, geogrid, opts):
     rtc_anf_gamma0_to_sigma0_file = (
         f'{output_dir}/{product_id}_{LAYER_NAME_RTC_ANF_GAMMA0_TO_SIGMA0}.{raster_extension}'
     )
-    radar_grid = umbra_sicd.as_isce3_radargrid()
-    orbit = umbra_sicd.orbit
-    wavelength = umbra_sicd.wavelength
+    radar_grid = capella_sicd.as_isce3_radargrid()
+    orbit = capella_sicd.orbit
+    wavelength = capella_sicd.wavelength
     lookside = radar_grid.lookside
 
     dem_raster = isce3.io.Raster(opts.dem_path)
     ellipsoid = isce3.core.Ellipsoid()
-    doppler = umbra_sicd.get_doppler_centroid_grid()
+    doppler = capella_sicd.get_doppler_centroid_grid()
     exponent = 2
 
     x_snap = geogrid.spacing_x
@@ -605,7 +597,6 @@ def umbra_rtc_with_radargrid(umbra_sicd, geogrid, opts):
         radar_grid_layover_shadow_mask,
         orbit,
         geogrid,
-        umbra_sicd,
         dem_raster,
         layover_shadow_mask_file,
         raster_format,
