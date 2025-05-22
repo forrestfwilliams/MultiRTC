@@ -53,8 +53,8 @@ class CapellaSICD:
     @staticmethod
     def calculate_orbit(epoch, sensing_start, sensing_end, arp_pos_poly):
         svs = []
-        orbit_start = np.floor(sensing_start) - 5
-        orbit_end = np.ceil(sensing_end) + 5
+        orbit_start = np.floor(sensing_start) - 10
+        orbit_end = np.ceil(sensing_end) + 10
         for offset_sec in np.arange(orbit_start, orbit_end + 1, 1):
             t = sensing_start + offset_sec
             pos = arp_pos_poly(t)
@@ -91,19 +91,18 @@ class CapellaSICD:
         scp_index = np.array([sicd.ImageData.SCPPixel.Row, sicd.ImageData.SCPPixel.Col])
         row_shift = sicd.ImageData.SCPPixel.Row - sicd.ImageData.FirstRow
         col_shift = sicd.ImageData.SCPPixel.Col - sicd.ImageData.FirstCol
-        row_mult = sicd.Grid.Row.SS
-        col_mult = sicd.Grid.Col.SS
-        range_pixel_spacing = row_mult
+        range_pixel_spacing = sicd.Grid.Row.SS
         assert sicd.Grid.Type == 'RGZERO', 'Only range zero doppler grids supported for Capella data'
         collect_start = sicd.Timeline.CollectStart
         # seconds after collect start
-        first_col_time = sicd.Grid.TimeCOAPoly((0 - row_shift) * row_mult, (0 - col_shift) * col_mult)
-        last_col_time = sicd.Grid.TimeCOAPoly((0 - row_shift) * row_mult, (shape[1] - col_shift) * col_mult)
-        sensing_start = min(first_col_time, last_col_time)  # + 2  # fudged
+        first_col_time = sicd.RMA.INCA.TimeCAPoly(0 - col_shift)
+        last_col_time = sicd.RMA.INCA.TimeCAPoly(shape[1] - col_shift)
+        sensing_start = min(first_col_time, last_col_time)
         sensing_end = max(first_col_time, last_col_time)
         prf = np.mean([ipp.IPPPoly.derivative_eval((ipp.TStart + ipp.TEnd) / 2) for ipp in sicd.Timeline.IPP])
         starting_row_pos = (
-            sicd.GeoData.SCP.ECF.get_array() + sicd.Grid.Row.UVectECF.get_array() * (0 - row_shift) * row_mult
+            sicd.GeoData.SCP.ECF.get_array()
+            + sicd.Grid.Row.UVectECF.get_array() * (0 - row_shift) * range_pixel_spacing
         )
         starting_range = np.linalg.norm(sicd.SCPCOA.ARPPos.get_array() - starting_row_pos)
         orbit = CapellaSICD.calculate_orbit(collect_start, sensing_start, sensing_end, sicd.Position.ARPPoly)
