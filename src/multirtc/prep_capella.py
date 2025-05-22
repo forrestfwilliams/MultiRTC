@@ -99,7 +99,8 @@ class CapellaSICD:
         last_col_time = sicd.RMA.INCA.TimeCAPoly(shape[1] - col_shift)
         sensing_start = min(first_col_time, last_col_time)
         sensing_end = max(first_col_time, last_col_time)
-        prf = np.mean([ipp.IPPPoly.derivative_eval((ipp.TStart + ipp.TEnd) / 2) for ipp in sicd.Timeline.IPP])
+        # prf = np.mean([ipp.IPPPoly.derivative_eval((ipp.TStart + ipp.TEnd) / 2) for ipp in sicd.Timeline.IPP])
+        prf = shape[1] / (sensing_end - sensing_start)
         starting_row_pos = (
             sicd.GeoData.SCP.ECF.get_array()
             + sicd.Grid.Row.UVectECF.get_array() * (0 - row_shift) * range_pixel_spacing
