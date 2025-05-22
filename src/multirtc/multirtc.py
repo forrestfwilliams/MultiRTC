@@ -14,9 +14,8 @@ from multirtc.rtc_options import RtcOptions
 
 def print_wkt(sicd):
     radar_grid = sicd.as_isce3_radar_grid()
-    dem = isce3.geometry.DEMInterpolator()
+    dem = isce3.geometry.DEMInterpolator(sicd.hae)
     doppler = sicd.get_doppler_centroid_grid()
-    breakpoint()
     wkt = isce3.geometry.get_geo_perimeter_wkt(
         grid=radar_grid, orbit=sicd.orbit, doppler=doppler, dem=dem, points_per_edge=3
     )

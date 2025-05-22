@@ -5,12 +5,10 @@ from typing import Optional
 
 import isce3
 import numpy as np
-from numpy.polynomial.polynomial import polyder, polyval, polyval2d
 from sarpy.io.complex.sicd import SICDReader
 from shapely.geometry import Polygon
 
 from multirtc import dem
-from multirtc.define_geogrid import get_point_epsg
 
 
 def check_poly_order(poly):
@@ -40,6 +38,7 @@ class CapellaSICD:
     wavelength: float
     polarization: str
     lookside: str  # 'right' or 'left'
+    hae: float
     shape: tuple[int, int]
     scp_index: tuple[int, int]
     range_pixel_spacing: float
@@ -52,28 +51,14 @@ class CapellaSICD:
     beta0_coeff: np.ndarray
 
     @staticmethod
-    def get_arp_pos_at_time(time, arp_pos_poly):
-        x = polyval(time, arp_pos_poly.X.get_array())
-        y = polyval(time, arp_pos_poly.Y.get_array())
-        z = polyval(time, arp_pos_poly.Z.get_array())
-        return np.array([x, y, z])
-
-    @staticmethod
-    def get_arp_vel_at_time(time, arp_pos_poly):
-        x = polyval(time, polyder(arp_pos_poly.X.get_array()))
-        y = polyval(time, polyder(arp_pos_poly.Y.get_array()))
-        z = polyval(time, polyder(arp_pos_poly.Z.get_array()))
-        return np.array([x, y, z])
-
-    @staticmethod
     def calculate_orbit(epoch, sensing_start, sensing_end, arp_pos_poly):
         svs = []
         orbit_start = np.floor(sensing_start) - 5
         orbit_end = np.ceil(sensing_end) + 5
         for offset_sec in np.arange(orbit_start, orbit_end + 1, 1):
             t = sensing_start + offset_sec
-            pos = CapellaSICD.get_arp_pos_at_time(t, arp_pos_poly)
-            vel = CapellaSICD.get_arp_vel_at_time(t, arp_pos_poly)
+            pos = arp_pos_poly(t)
+            vel = arp_pos_poly.derivative_eval(t)
             t_isce = to_isce_datetime(epoch + timedelta(seconds=t))
             svs.append(isce3.core.StateVector(t_isce, pos, vel))
         return isce3.core.Orbit(svs, to_isce_datetime(epoch))
@@ -104,26 +89,23 @@ class CapellaSICD:
         footprint = Polygon([(ic.Lon, ic.Lat) for ic in sicd.GeoData.ImageCorners])
         shape = np.array([sicd.ImageData.NumRows, sicd.ImageData.NumCols])
         scp_index = np.array([sicd.ImageData.SCPPixel.Row, sicd.ImageData.SCPPixel.Col])
-        start_index = scp_index - shape
-        r_ss = sicd.Grid.Row.SS
-        c_ss = sicd.Grid.Col.SS
-        range_pixel_spacing = r_ss
+        row_shift = sicd.ImageData.SCPPixel.Row - sicd.ImageData.FirstRow
+        col_shift = sicd.ImageData.SCPPixel.Col - sicd.ImageData.FirstCol
+        row_mult = sicd.Grid.Row.SS
+        col_mult = sicd.Grid.Col.SS
+        range_pixel_spacing = row_mult
         assert sicd.Grid.Type == 'RGZERO', 'Only range zero doppler grids supported for Capella data'
         collect_start = sicd.Timeline.CollectStart
         # seconds after collect start
-        tcoa_coefs = sicd.Grid.TimeCOAPoly.Coefs
-        first_col_time = polyval2d(start_index[0] * r_ss, start_index[1] * c_ss, tcoa_coefs)
-        last_col_time = polyval2d(start_index[0] * r_ss, (start_index[1] + shape[1]) * c_ss, tcoa_coefs)
-        sensing_start = min(first_col_time, last_col_time)
+        first_col_time = sicd.Grid.TimeCOAPoly((0 - row_shift) * row_mult, (0 - col_shift) * col_mult)
+        last_col_time = sicd.Grid.TimeCOAPoly((shape[0] - row_shift) * row_mult, (shape[1] - col_shift) * col_mult)
+        sensing_start = min(first_col_time, last_col_time)  # + 2  # fudged
         sensing_end = max(first_col_time, last_col_time)
-        prf = np.mean([ipp.IPPPoly.Coefs[1] for ipp in sicd.Timeline.IPP])
-        starting_grid_pos = (
-            sicd.Grid.Row.UVectECF.get_array() * r_ss * start_index[0]
-            + sicd.Grid.Col.UVectECF.get_array() * c_ss * start_index[1]
-            + sicd.GeoData.SCP.ECF.get_array()
+        prf = np.mean([ipp.IPPPoly.derivative_eval((ipp.TStart + ipp.TEnd) / 2) for ipp in sicd.Timeline.IPP])
+        starting_row_pos = (
+            sicd.GeoData.SCP.ECF.get_array() + sicd.Grid.Row.UVectECF.get_array() * (0 - row_shift) * row_mult
         )
-        starting_arp_pos = cls.get_arp_pos_at_time(sensing_start, sicd.Position.ARPPoly)
-        starting_range = np.linalg.norm(starting_grid_pos - starting_arp_pos)
+        starting_range = np.linalg.norm(sicd.SCPCOA.ARPPos.get_array() - starting_row_pos)
         orbit = CapellaSICD.calculate_orbit(collect_start, sensing_start, sensing_end, sicd.Position.ARPPoly)
         beta0_coeff = sicd.Radiometric.BetaZeroSFPoly.Coefs
         capella_sicd = cls(
@@ -134,6 +116,7 @@ class CapellaSICD:
             wavelength=wavelength,
             polarization=polarization,
             lookside=lookside,
+            hae=float(sicd.GeoData.SCP.LLH.HAE),
             range_pixel_spacing=range_pixel_spacing,
             scp_index=scp_index,
             collect_start=collect_start,
