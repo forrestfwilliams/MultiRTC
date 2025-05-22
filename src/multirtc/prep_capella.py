@@ -98,7 +98,7 @@ class CapellaSICD:
         collect_start = sicd.Timeline.CollectStart
         # seconds after collect start
         first_col_time = sicd.Grid.TimeCOAPoly((0 - row_shift) * row_mult, (0 - col_shift) * col_mult)
-        last_col_time = sicd.Grid.TimeCOAPoly((shape[0] - row_shift) * row_mult, (shape[1] - col_shift) * col_mult)
+        last_col_time = sicd.Grid.TimeCOAPoly((0 - row_shift) * row_mult, (shape[1] - col_shift) * col_mult)
         sensing_start = min(first_col_time, last_col_time)  # + 2  # fudged
         sensing_end = max(first_col_time, last_col_time)
         prf = np.mean([ipp.IPPPoly.derivative_eval((ipp.TStart + ipp.TEnd) / 2) for ipp in sicd.Timeline.IPP])
