@@ -4,7 +4,7 @@ from typing import Optional
 
 import isce3
 
-from multirtc.create_rtc import run_single_job, umbra_rtc
+from multirtc.create_rtc import capella_rtc, run_single_job, umbra_rtc
 from multirtc.define_geogrid import generate_geogrids
 from multirtc.prep_burst import prep_burst
 from multirtc.prep_capella import prep_capella
@@ -13,7 +13,7 @@ from multirtc.rtc_options import RtcOptions
 
 
 def print_wkt(sicd):
-    radar_grid = sicd.as_isce3_radar_grid()
+    radar_grid = sicd.as_isce3_radargrid()
     dem = isce3.geometry.DEMInterpolator(sicd.hae)
     doppler = sicd.get_doppler_centroid_grid()
     wkt = isce3.geometry.get_geo_perimeter_wkt(
@@ -80,10 +80,9 @@ def opera_rtc_capella_sicd(granule: str, resolution: int = 30, work_dir: Optiona
         raise FileNotFoundError(f'Capella SICD must be present in input dir {input_dir} for processing.')
     [d.mkdir(parents=True, exist_ok=True) for d in [input_dir, output_dir]]
     capella_sicd, dem_path = prep_capella(granule_path, work_dir=input_dir)
-    print_wkt(capella_sicd)
-    # opts = RtcOptions(dem_path=str(dem_path), output_dir=str(output_dir), resolution=resolution)
-    # geogrid = generate_geogrids(burst, opts.resolution)
-    # run_single_job(granule, burst, geogrid, opts)
+    opts = RtcOptions(dem_path=str(dem_path), output_dir=str(output_dir), resolution=resolution)
+    geogrid = generate_geogrids(capella_sicd, opts.resolution)
+    capella_rtc(capella_sicd, geogrid, opts)
 
 
 def main():

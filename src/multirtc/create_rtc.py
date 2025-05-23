@@ -550,11 +550,11 @@ def run_single_job(product_id: str, burst: Sentinel1BurstSlc, geogrid, opts: Rtc
     logger.info(f'elapsed time: {t_end - t_start}')
 
 
-def capella_rtc(capella_sicd, geogrid, opts):
+def capella_rtc(sicd, geogrid, opts):
     # Common initializations
     t_start = time.time()
     output_dir = str(opts.output_dir)
-    product_id = capella_sicd.id
+    product_id = sicd.id
     os.makedirs(output_dir, exist_ok=True)
 
     raster_format = 'GTiff'
@@ -567,14 +567,14 @@ def capella_rtc(capella_sicd, geogrid, opts):
     rtc_anf_gamma0_to_sigma0_file = (
         f'{output_dir}/{product_id}_{LAYER_NAME_RTC_ANF_GAMMA0_TO_SIGMA0}.{raster_extension}'
     )
-    radar_grid = capella_sicd.as_isce3_radargrid()
-    orbit = capella_sicd.orbit
-    wavelength = capella_sicd.wavelength
+    radar_grid = sicd.as_isce3_radargrid()
+    orbit = sicd.orbit
+    wavelength = sicd.wavelength
     lookside = radar_grid.lookside
 
     dem_raster = isce3.io.Raster(opts.dem_path)
     ellipsoid = isce3.core.Ellipsoid()
-    doppler = capella_sicd.get_doppler_centroid_grid()
+    doppler = sicd.get_doppler_centroid_grid()
     exponent = 2
 
     x_snap = geogrid.spacing_x
@@ -582,8 +582,9 @@ def capella_rtc(capella_sicd, geogrid, opts):
     geogrid.start_x = np.floor(float(geogrid.start_x) / x_snap) * x_snap
     geogrid.start_y = np.ceil(float(geogrid.start_y) / y_snap) * y_snap
 
-    # input_filename = save_as_beta0(umbra_sicd, Path(opts.output_dir))
-    input_filename = 'beta0.tif'
+    input_filename = sicd.file_path.parent / (sicd.file_path.stem + '_beta0.tif')
+    if not input_filename.exists():
+        sicd.create_complex_beta0(input_filename)
     input_filename = str(input_filename)
 
     # geocoding optional arguments
