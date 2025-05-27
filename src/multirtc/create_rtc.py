@@ -567,14 +567,14 @@ def capella_rtc(sicd, geogrid, opts):
     rtc_anf_gamma0_to_sigma0_file = (
         f'{output_dir}/{product_id}_{LAYER_NAME_RTC_ANF_GAMMA0_TO_SIGMA0}.{raster_extension}'
     )
-    radar_grid = sicd.as_isce3_radargrid()
+    radar_grid = sicd.radar_grid
     orbit = sicd.orbit
     wavelength = sicd.wavelength
     lookside = radar_grid.lookside
 
     dem_raster = isce3.io.Raster(opts.dem_path)
     ellipsoid = isce3.core.Ellipsoid()
-    doppler = sicd.get_doppler_centroid_grid()
+    doppler = sicd.doppler_centroid_grid
     exponent = 2
 
     x_snap = geogrid.spacing_x
@@ -582,7 +582,7 @@ def capella_rtc(sicd, geogrid, opts):
     geogrid.start_x = np.floor(float(geogrid.start_x) / x_snap) * x_snap
     geogrid.start_y = np.ceil(float(geogrid.start_y) / y_snap) * y_snap
 
-    input_filename = sicd.file_path.parent / (sicd.file_path.stem + '_beta0.tif')
+    input_filename = sicd.filepath.parent / (sicd.filepath.stem + '_beta0.tif')
     if not input_filename.exists():
         sicd.create_complex_beta0(input_filename)
     input_filename = str(input_filename)

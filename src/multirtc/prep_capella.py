@@ -1,181 +1,13 @@
-from dataclasses import dataclass
-from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
-import isce3
-import numpy as np
-from numpy.polynomial.polynomial import polyval2d
 from osgeo import gdal
-from sarpy.io.complex.sicd import SICDReader
-from shapely.geometry import Polygon
 
 from multirtc import dem
+from multirtc.sicd import SicdRzdSlc
 
 
 gdal.UseExceptions()
-
-
-def check_poly_order(poly):
-    assert len(poly.Coefs) == poly.order1 + 1, 'Polynomial order does not match number of coefficients'
-
-
-def to_isce_datetime(dt):
-    if isinstance(dt, datetime):
-        return isce3.core.DateTime(dt)
-    elif isinstance(dt, np.datetime64):
-        return isce3.core.DateTime(dt.item())
-    else:
-        raise ValueError(f'Unsupported datetime type: {type(dt)}. Expected datetime or np.datetime64.')
-
-
-@dataclass
-class Point:
-    x: float
-    y: float
-
-
-@dataclass
-class CapellaSICD:
-    id: str
-    file_path: Path
-    footprint: Polygon
-    center: Point
-    wavelength: float
-    polarization: str
-    lookside: str  # 'right' or 'left'
-    hae: float
-    shape: tuple[int, int]
-    scp_index: tuple[int, int]
-    row_mult: float
-    col_mult: float
-    range_pixel_spacing: float
-    collect_start: datetime
-    sensing_start: float
-    sensing_end: float
-    az_reversed: bool
-    prf: float
-    starting_range: float
-    orbit: isce3.core.Orbit
-    beta0_coeff: np.ndarray
-
-    @staticmethod
-    def calculate_orbit(epoch, sensing_start, sensing_end, arp_pos_poly):
-        svs = []
-        orbit_start = np.floor(sensing_start) - 10
-        orbit_end = np.ceil(sensing_end) + 10
-        for offset_sec in np.arange(orbit_start, orbit_end + 1, 1):
-            t = sensing_start + offset_sec
-            pos = arp_pos_poly(t)
-            vel = arp_pos_poly.derivative_eval(t)
-            t_isce = to_isce_datetime(epoch + timedelta(seconds=t))
-            svs.append(isce3.core.StateVector(t_isce, pos, vel))
-        return isce3.core.Orbit(svs, to_isce_datetime(epoch))
-
-    def as_isce3_radargrid(self):
-        radar_grid = isce3.product.RadarGridParameters(
-            sensing_start=self.sensing_start,
-            wavelength=self.wavelength,
-            prf=self.prf,
-            starting_range=self.starting_range,
-            range_pixel_spacing=self.range_pixel_spacing,
-            lookside=isce3.core.LookSide.Right if self.lookside == 'right' else isce3.core.LookSide.Left,
-            length=self.shape[1],  # flipped for "shadows down" convention
-            width=self.shape[0],  # flipped for "shadows down" convention
-            ref_epoch=to_isce_datetime(self.collect_start),
-        )
-        return radar_grid
-
-    def get_doppler_centroid_grid(self):
-        return isce3.core.LUT2d()
-
-    def get_xrow_ycol(self) -> np.ndarray:
-        """Calculate xrow and ycol SICD."""
-        irow = np.tile(np.arange(self.shape[0]), (self.shape[1], 1)).T
-        irow -= self.scp_index[0]
-        xrow = irow * self.row_mult
-
-        icol = np.tile(np.arange(self.shape[1]), (self.shape[0], 1))
-        icol -= self.scp_index[1]
-        ycol = icol * self.col_mult
-        return xrow, ycol
-
-    def load_data(self):
-        """Load data from the UMBRA SICD file."""
-        reader = SICDReader(str(self.file_path))
-        data = reader[:, :]
-        return data
-
-    def create_complex_beta0(self, outpath, isce_format=True):
-        xrow, ycol = self.get_xrow_ycol()
-        scale_factor = np.sqrt(polyval2d(xrow, ycol, self.beta0_coeff))
-        data = self.load_data()
-        scaled_data = data * scale_factor
-
-        if isce_format:
-            if self.az_reversed:
-                scaled_data = scaled_data[:, ::-1].T
-            else:
-                scaled_data = scaled_data.T
-
-        driver = gdal.GetDriverByName('GTiff')
-        ds = driver.Create(str(outpath), scaled_data.shape[1], scaled_data.shape[0], 1, gdal.GDT_CFloat32)
-        band = ds.GetRasterBand(1)
-        band.WriteArray(scaled_data)
-        band.FlushCache()
-        ds = None
-
-    @classmethod
-    def from_sarpy_sicd(cls, sicd, file_path):
-        center_frequency = sicd.RadarCollection.TxFrequency.Min + sicd.RadarCollection.TxFrequency.Max / 2
-        wavelength = isce3.core.speed_of_light / center_frequency
-        polarization = sicd.RadarCollection.RcvChannels[0].TxRcvPolarization.replace(':', '')
-        lookside = 'right' if sicd.SCPCOA.SideOfTrack == 'R' else 'left'
-        footprint = Polygon([(ic.Lon, ic.Lat) for ic in sicd.GeoData.ImageCorners])
-        shape = np.array([sicd.ImageData.NumRows, sicd.ImageData.NumCols])
-        scp_index = np.array([sicd.ImageData.SCPPixel.Row, sicd.ImageData.SCPPixel.Col])
-        row_shift = sicd.ImageData.SCPPixel.Row - sicd.ImageData.FirstRow
-        col_shift = sicd.ImageData.SCPPixel.Col - sicd.ImageData.FirstCol
-        range_pixel_spacing = sicd.Grid.Row.SS
-        assert sicd.Grid.Type == 'RGZERO', 'Only range zero doppler grids supported for Capella data'
-        collect_start = sicd.Timeline.CollectStart
-        # seconds after collect start
-        first_col_time = sicd.RMA.INCA.TimeCAPoly(0 - col_shift)
-        last_col_time = sicd.RMA.INCA.TimeCAPoly(shape[1] - col_shift)
-        sensing_start = min(first_col_time, last_col_time)
-        sensing_end = max(first_col_time, last_col_time)
-        az_reversed = last_col_time < first_col_time
-        prf = shape[1] / (sensing_end - sensing_start)
-        starting_row_pos = (
-            sicd.GeoData.SCP.ECF.get_array()
-            + sicd.Grid.Row.UVectECF.get_array() * (0 - row_shift) * range_pixel_spacing
-        )
-        starting_range = np.linalg.norm(sicd.SCPCOA.ARPPos.get_array() - starting_row_pos)
-        orbit = CapellaSICD.calculate_orbit(collect_start, sensing_start, sensing_end, sicd.Position.ARPPoly)
-        capella_sicd = cls(
-            id=Path(file_path).with_suffix('').name,
-            file_path=file_path,
-            footprint=footprint,
-            shape=shape,
-            center=Point(sicd.GeoData.SCP.LLH.Lon, sicd.GeoData.SCP.LLH.Lat),
-            wavelength=wavelength,
-            polarization=polarization,
-            lookside=lookside,
-            hae=float(sicd.GeoData.SCP.LLH.HAE),
-            range_pixel_spacing=range_pixel_spacing,
-            scp_index=scp_index,
-            col_mult=sicd.Grid.Col.SS,
-            row_mult=sicd.Grid.Row.SS,
-            collect_start=collect_start,
-            sensing_start=sensing_start,
-            sensing_end=sensing_end,
-            az_reversed=az_reversed,
-            prf=prf,
-            starting_range=starting_range,
-            orbit=orbit,
-            beta0_coeff=sicd.Radiometric.BetaZeroSFPoly.Coefs,
-        )
-        return capella_sicd
 
 
 def prep_capella(granule_path: Path, work_dir: Optional[Path] = None) -> Path:
@@ -187,9 +19,7 @@ def prep_capella(granule_path: Path, work_dir: Optional[Path] = None) -> Path:
     """
     if work_dir is None:
         work_dir = Path.cwd()
-    reader = SICDReader(str(granule_path))
-    sicd = reader.get_sicds_as_tuple()[0]
-    capella_sicd = CapellaSICD.from_sarpy_sicd(sicd, granule_path)
+    capella_sicd = SicdRzdSlc(granule_path)
     dem_path = work_dir / 'dem.tif'
     dem.download_opera_dem_for_footprint(dem_path, capella_sicd.footprint)
     return capella_sicd, dem_path
