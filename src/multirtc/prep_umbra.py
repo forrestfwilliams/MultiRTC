@@ -68,11 +68,12 @@ class UmbraSICD:
         look_unit = scp_ecef - arp_ecef
         look_unit = look_unit / np.linalg.norm(look_unit)  # normalize
         look_unit_horz = look_unit.copy()
-        look_unit_horz[2] = 0
+        look_unit_horz[2] = 0.0
         look_unit_horz /= np.linalg.norm(look_unit_horz)
-        azimuth_rad = np.arctan2(look_unit_horz[1], look_unit_horz[0])  # in radians
+        azimuth_rad = np.arctan2(look_unit_horz[0], look_unit_horz[1])  # in radians
         azimuth = np.rad2deg(azimuth_rad)
-        azimuth = (90 - azimuth) % 360
+        azimuth = 90 - azimuth
+        azimuth = 360 + azimuth if azimuth < 0 else azimuth
         return int(np.round(azimuth))
 
     @staticmethod
