@@ -10,7 +10,7 @@ on:
 jobs:
   call-release-workflow:
     # Docs: https://github.com/ASFHyP3/actions
-    uses: ASFHyP3/actions/.github/workflows/reusable-release-checklist-comment.yml@v0.18.1
+    uses: ASFHyP3/actions/.github/workflows/reusable-release-checklist-comment.yml@v0.20.0
     permissions:
       pull-requests: write
     secrets:
