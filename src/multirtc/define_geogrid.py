@@ -128,13 +128,12 @@ def generate_geogrids(slc_obj, resolution: int, epsg: int = None, rda: bool = Tr
     if epsg is None:
         epsg = get_point_epsg(slc_obj.center.y, slc_obj.center.x)
 
-    if rda:
-        radar_grid = slc_obj.as_isce3_radargrid()
-        geogrid = isce3.product.bbox_to_geogrid(
-            radar_grid, slc_obj.orbit, isce3.core.LUT2d(), x_spacing, y_spacing, epsg
-        )
-    else:
-        geogrid = slc_obj.get_geogrid(x_spacing, y_spacing)
-
+    # if rda:
+    #     radar_grid = slc_obj.as_isce3_radargrid()
+    # else:
+    #     geogrid = slc_obj.get_geogrid(x_spacing, y_spacing)
+    geogrid = isce3.product.bbox_to_geogrid(
+        slc_obj.radar_grid, slc_obj.orbit, slc_obj.doppler_centroid_grid, x_spacing, y_spacing, epsg
+    )
     geogrid_snapped = snap_geogrid(geogrid, geogrid.spacing_x, geogrid.spacing_y)
     return geogrid_snapped
