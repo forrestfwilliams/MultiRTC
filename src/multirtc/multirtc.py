@@ -37,9 +37,16 @@ def opera_rtc_s1_burst(granule: str, resolution: int = 30, work_dir: Optional[Pa
     [d.mkdir(parents=True, exist_ok=True) for d in [input_dir, output_dir]]
 
     burst, dem_path = prep_burst(granule, work_dir=input_dir)
-    opts = RtcOptions(dem_path=str(dem_path), output_dir=str(output_dir), resolution=resolution)
+    opts = RtcOptions(
+        dem_path=str(dem_path),
+        output_dir=str(output_dir),
+        resolution=resolution,
+        apply_bistatic_delay=True,
+        apply_static_tropo=True,
+    )
     geogrid = generate_geogrids(burst, opts.resolution)
-    run_single_job(granule, burst, geogrid, opts)
+    capella_rtc(burst, geogrid, opts)
+    # run_single_job(granule, burst, geogrid, opts)
 
 
 def opera_rtc_umbra_sicd(granule: str, resolution: int = 30, work_dir: Optional[Path] = None) -> None:
@@ -80,7 +87,13 @@ def opera_rtc_capella_sicd(granule: str, resolution: int = 30, work_dir: Optiona
         raise FileNotFoundError(f'Capella SICD must be present in input dir {input_dir} for processing.')
     [d.mkdir(parents=True, exist_ok=True) for d in [input_dir, output_dir]]
     capella_sicd, dem_path = prep_capella(granule_path, work_dir=input_dir)
-    opts = RtcOptions(dem_path=str(dem_path), output_dir=str(output_dir), resolution=resolution)
+    opts = RtcOptions(
+        dem_path=str(dem_path),
+        output_dir=str(output_dir),
+        resolution=resolution,
+        apply_bistatic_delay=False,
+        apply_static_tropo=False,
+    )
     geogrid = generate_geogrids(capella_sicd, opts.resolution)
     capella_rtc(capella_sicd, geogrid, opts)
 

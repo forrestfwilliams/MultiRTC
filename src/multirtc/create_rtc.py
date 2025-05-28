@@ -11,8 +11,10 @@ from s1reader.s1_burst_slc import Sentinel1BurstSlc
 from scipy import ndimage
 from tqdm import tqdm
 
+from multirtc.prep_burst import S1BurstSlc
 from multirtc.rtc_options import RtcOptions
 from multirtc.s1burst_corrections import apply_slc_corrections, compute_correction_lut
+from multirtc.sicd import SicdSlc
 
 
 logger = logging.getLogger('rtc_s1')
@@ -582,14 +584,47 @@ def capella_rtc(sicd, geogrid, opts):
     geogrid.start_x = np.floor(float(geogrid.start_x) / x_snap) * x_snap
     geogrid.start_y = np.ceil(float(geogrid.start_y) / y_snap) * y_snap
 
-    input_filename = sicd.filepath.parent / (sicd.filepath.stem + '_beta0.tif')
-    if not input_filename.exists():
-        sicd.create_complex_beta0(input_filename)
-    input_filename = str(input_filename)
+    if isinstance(sicd, SicdSlc):
+        input_filename = sicd.filepath.parent / (sicd.filepath.stem + '_beta0.tif')
+        if not input_filename.exists():
+            sicd.create_complex_beta0(input_filename)
+        input_filename = str(input_filename)
+    elif isinstance(sicd, S1BurstSlc) and opts.apply_thermal_noise or opts.apply_abs_rad:
+        # Convert to beta0 and apply thermal noise correction
+        input_filename = str(sicd.filepath.parent / (sicd.filepath.stem + '_beta0.tif'))
+        apply_slc_corrections(
+            sicd.source,
+            sicd.filepath,
+            input_filename,
+            flag_output_complex=True,
+            flag_thermal_correction=opts.apply_thermal_noise,
+            flag_apply_abs_rad_correction=opts.apply_abs_rad,
+        )
+    else:
+        input_filename = str(sicd.filepath)
 
     # geocoding optional arguments
     geocode_kwargs = {}
     layover_shadow_mask_geocode_kwargs = {}
+
+    # get sub_swaths metadata
+    if isinstance(sicd, S1BurstSlc) and opts.apply_valid_samples_sub_swath_masking:
+        # Extract burst boundaries and create sub_swaths object to mask
+        # invalid radar samples
+        n_subswaths = 1
+        sub_swaths = isce3.product.SubSwaths(radar_grid.length, radar_grid.width, n_subswaths)
+        last_range_sample = min([sicd.last_valid_sample, radar_grid.width])
+        valid_samples_sub_swath = np.repeat(
+            [[sicd.first_valid_sample, last_range_sample + 1]], radar_grid.length, axis=0
+        )
+        for i in range(sicd.first_valid_line):
+            valid_samples_sub_swath[i, :] = 0
+        for i in range(sicd.last_valid_line, radar_grid.length):
+            valid_samples_sub_swath[i, :] = 0
+
+        sub_swaths.set_valid_samples_array(1, valid_samples_sub_swath)
+        geocode_kwargs['sub_swaths'] = sub_swaths
+        layover_shadow_mask_geocode_kwargs['sub_swaths'] = sub_swaths
 
     layover_shadow_mask_file = f'{output_dir}/{product_id}_{LAYER_NAME_LAYOVER_SHADOW_MASK}.{raster_extension}'
     logger.info(f'    computing layover shadow mask for {product_id}')
@@ -621,6 +656,19 @@ def capella_rtc(sicd, geogrid, opts):
         rtc_anf_gamma0_to_sigma0_file, geogrid.width, geogrid.length, 1, gdal.GDT_Float32, raster_format
     )
     geocode_kwargs['out_geo_rtc_gamma0_to_sigma0'] = out_geo_rtc_gamma0_to_sigma0_obj
+    if opts.apply_bistatic_delay or opts.apply_static_tropo:
+        rg_lut, az_lut = compute_correction_lut(
+            sicd.source,
+            dem_raster,
+            output_dir,
+            opts.correction_lut_range_spacing_in_meters,
+            opts.correction_lut_azimuth_spacing_in_meters,
+            opts.apply_bistatic_delay,
+            opts.apply_static_tropo,
+        )
+        geocode_kwargs['az_time_correction'] = az_lut
+        if rg_lut is not None:
+            geocode_kwargs['slant_range_correction'] = rg_lut
 
     rdr_raster = isce3.io.Raster(input_filename)
     # Generate output geocoded burst raster

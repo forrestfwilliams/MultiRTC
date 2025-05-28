@@ -2,7 +2,22 @@ from abc import ABC
 from datetime import datetime
 from pathlib import Path
 
+import isce3
+import numpy as np
 from shapely.geometry import Point, Polygon
+
+
+def to_isce_datetime(dt):
+    if isinstance(dt, datetime):
+        return isce3.core.DateTime(dt)
+    elif isinstance(dt, np.datetime64):
+        return isce3.core.DateTime(dt.item())
+    else:
+        raise ValueError(f'Unsupported datetime type: {type(dt)}. Expected datetime or np.datetime64.')
+
+
+def from_isce_datetime(dt):
+    return datetime.fromisoformat(dt.isoformat())
 
 
 class SlcTemplate(ABC):

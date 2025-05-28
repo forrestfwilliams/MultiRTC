@@ -130,7 +130,7 @@ def compute_correction_lut(
 
 def apply_slc_corrections(
     burst: Sentinel1BurstSlc,
-    path_slc_vrt: str,
+    path_input_slc_vrt: str,
     path_slc_out: str,
     flag_output_complex: bool = False,
     flag_thermal_correction: bool = True,
@@ -143,7 +143,7 @@ def apply_slc_corrections(
     ----------
     burst_in: Sentinel1BurstSlc
         Input burst to apply the correction
-    path_slc_vrt: str
+    path_input_slc_vrt: str
         Path to the input burst to apply correction
     path_slc_out: str
         Path to the output SLC which the corrections are applied
@@ -157,8 +157,7 @@ def apply_slc_corrections(
     """
 
     # Load the SLC of the burst
-    burst.slc_to_vrt_file(path_slc_vrt)
-    slc_gdal_ds = gdal.Open(path_slc_vrt)
+    slc_gdal_ds = gdal.Open(path_input_slc_vrt)
     arr_slc_from = slc_gdal_ds.ReadAsArray()
 
     # Apply thermal noise correction

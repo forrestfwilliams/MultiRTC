@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
 
 import isce3
@@ -8,23 +8,14 @@ from osgeo import gdal
 from sarpy.io.complex.sicd import SICDReader
 from shapely.geometry import Point, Polygon
 
-from multirtc.base import SlcTemplate
-
-
-def to_isce_datetime(dt):
-    if isinstance(dt, datetime):
-        return isce3.core.DateTime(dt)
-    elif isinstance(dt, np.datetime64):
-        return isce3.core.DateTime(dt.item())
-    else:
-        raise ValueError(f'Unsupported datetime type: {type(dt)}. Expected datetime or np.datetime64.')
+from multirtc.base import SlcTemplate, to_isce_datetime
 
 
 def check_poly_order(poly):
     assert len(poly.Coefs) == poly.order1 + 1, 'Polynomial order does not match number of coefficients'
 
 
-class Sicd:
+class SicdSlc:
     def __init__(self, sicd_path):
         reader = SICDReader(str(sicd_path.expanduser().resolve()))
         sicd = reader.get_sicds_as_tuple()[0]
@@ -125,7 +116,7 @@ class Sicd:
         ds = None
 
 
-class SicdRzdSlc(SlcTemplate, Sicd):
+class SicdRzdSlc(SlcTemplate, SicdSlc):
     def __init__(self, sicd_path):
         super().__init__(sicd_path)
         assert self.source.Grid.Type == 'RGZERO', 'Only range zero doppler grids supported for Capella data'
@@ -163,8 +154,3 @@ class SicdRzdSlc(SlcTemplate, Sicd):
             ref_epoch=to_isce_datetime(self.reference_time),
         )
         return radar_grid
-
-
-if __name__ == '__main__':
-    slc = SicdRzdSlc(Path('~/Data/capella/input/CAPELLA_C15_SS_SICD_VV_20250225215110_20250225215124.ntf'))
-    breakpoint()
