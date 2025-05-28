@@ -3,7 +3,6 @@ import logging
 import isce3
 import numpy as np
 from osgeo import gdal
-from s1reader.s1_burst_slc import Sentinel1BurstSlc
 
 
 logger = logging.getLogger('rtc_s1')
@@ -126,68 +125,3 @@ def compute_correction_lut(
     )
 
     return rg_lut, az_lut
-
-
-def apply_slc_corrections(
-    burst: Sentinel1BurstSlc,
-    path_input_slc_vrt: str,
-    path_slc_out: str,
-    flag_output_complex: bool = False,
-    flag_thermal_correction: bool = True,
-    flag_apply_abs_rad_correction: bool = True,
-):
-    """Apply thermal correction stored in burst_in. Save the corrected signal
-    back to ENVI format. Preserves the phase when the output is complex
-
-    Parameters
-    ----------
-    burst_in: Sentinel1BurstSlc
-        Input burst to apply the correction
-    path_input_slc_vrt: str
-        Path to the input burst to apply correction
-    path_slc_out: str
-        Path to the output SLC which the corrections are applied
-    flag_output_complex: bool
-        `path_slc_out` will be in complex number when this is `True`
-        Otherwise, the output will be amplitude only.
-    flag_thermal_correction: bool
-        flag whether or not to apple the thermal correction.
-    flag_apply_abs_rad_correction: bool
-        Flag to apply radiometric calibration
-    """
-
-    # Load the SLC of the burst
-    slc_gdal_ds = gdal.Open(path_input_slc_vrt)
-    arr_slc_from = slc_gdal_ds.ReadAsArray()
-
-    # Apply thermal noise correction
-    if flag_thermal_correction:
-        logger.info('    applying thermal noise correction to burst SLC')
-        corrected_image = np.abs(arr_slc_from) ** 2 - burst.thermal_noise_lut
-        min_backscatter = 0
-        max_backscatter = None
-        corrected_image = np.clip(corrected_image, min_backscatter, max_backscatter)
-    else:
-        corrected_image = np.abs(arr_slc_from) ** 2
-
-    # Apply absolute radiometric correction
-    if flag_apply_abs_rad_correction:
-        logger.info('    applying absolute radiometric correction to burst SLC')
-        corrected_image = corrected_image / burst.burst_calibration.beta_naught**2
-
-    # Output as complex
-    if flag_output_complex:
-        factor_mag = np.sqrt(corrected_image) / np.abs(arr_slc_from)
-        factor_mag[np.isnan(factor_mag)] = 0.0
-        corrected_image = arr_slc_from * factor_mag
-        dtype = gdal.GDT_CFloat32
-    else:
-        dtype = gdal.GDT_Float32
-
-    # Save the corrected image
-    drvout = gdal.GetDriverByName('GTiff')
-    raster_out = drvout.Create(path_slc_out, burst.shape[1], burst.shape[0], 1, dtype)
-    band_out = raster_out.GetRasterBand(1)
-    band_out.WriteArray(corrected_image)
-    band_out.FlushCache()
-    del band_out

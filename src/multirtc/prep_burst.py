@@ -1,16 +1,18 @@
 from pathlib import Path
 from shutil import make_archive
 from typing import Optional
-from zipfile import ZipFile
 
 import isce3
-import lxml.etree as ET
+import numpy as np
 import s1reader
 from burst2safe.burst2safe import burst2safe
-from shapely.geometry import Polygon, box
+from osgeo import gdal
 
 from multirtc import dem, orbit
 from multirtc.base import SlcTemplate, from_isce_datetime, to_isce_datetime
+
+
+gdal.UseExceptions()
 
 
 class S1BurstSlc(SlcTemplate):
@@ -55,22 +57,52 @@ class S1BurstSlc(SlcTemplate):
         self.last_valid_sample = burst.last_valid_sample
         self.source = burst
 
+    def apply_valid_data_masking(self):
+        # Extract burst boundaries and create sub_swaths object to mask invalid radar samples
+        n_subswaths = 1
+        sub_swaths = isce3.product.SubSwaths(self.radar_grid.length, self.radar_grid.width, n_subswaths)
+        last_range_sample = min([self.last_valid_sample, self.radar_grid.width])
+        valid_samples_sub_swath = np.repeat(
+            [[self.first_valid_sample, last_range_sample + 1]], self.radar_grid.length, axis=0
+        )
+        for i in range(self.first_valid_line):
+            valid_samples_sub_swath[i, :] = 0
+        for i in range(self.last_valid_line, self.radar_grid.length):
+            valid_samples_sub_swath[i, :] = 0
 
-def get_s1_granule_bbox(granule_path: Path) -> box:
-    if granule_path.suffix == '.zip':
-        with ZipFile(granule_path, 'r') as z:
-            manifest_path = [x for x in z.namelist() if x.endswith('manifest.safe')][0]
-            with z.open(manifest_path) as m:
-                manifest = ET.parse(m).getroot()
-    else:
-        manifest_path = granule_path / 'manifest.safe'
-        manifest = ET.parse(manifest_path).getroot()
+        sub_swaths.set_valid_samples_array(1, valid_samples_sub_swath)
+        return sub_swaths
 
-    frame_element = [x for x in manifest.findall('.//metadataObject') if x.get('ID') == 'measurementFrameSet'][0]
-    frame_string = frame_element.find('.//{http://www.opengis.net/gml}coordinates').text
-    coord_strings = [pair.split(',') for pair in frame_string.split(' ')]
-    coords = [(float(lon), float(lat)) for lat, lon in coord_strings]
-    return Polygon(coords)
+    def create_complex_beta0(self, outpath: Path, flag_thermal_correction: bool = True):
+        """Apply conversion to beta0 and optionally applies a thermal correction."""
+        # Load the SLC of the burst
+        slc_gdal_ds = gdal.Open(str(self.filepath))
+        arr_slc_from = slc_gdal_ds.ReadAsArray()
+
+        # Apply thermal noise correction
+        if flag_thermal_correction:
+            corrected_image = np.abs(arr_slc_from) ** 2 - self.source.thermal_noise_lut
+            min_backscatter = 0
+            max_backscatter = None
+            corrected_image = np.clip(corrected_image, min_backscatter, max_backscatter)
+        else:
+            corrected_image = np.abs(arr_slc_from) ** 2
+
+        # Apply absolute radiometric correction
+        corrected_image = corrected_image / self.source.burst_calibration.beta_naught**2
+
+        factor_mag = np.sqrt(corrected_image) / np.abs(arr_slc_from)
+        factor_mag[np.isnan(factor_mag)] = 0.0
+        corrected_image = arr_slc_from * factor_mag
+        dtype = gdal.GDT_CFloat32
+
+        # Save the corrected image
+        drvout = gdal.GetDriverByName('GTiff')
+        raster_out = drvout.Create(outpath, self.shape[1], self.shape[0], 1, dtype)
+        band_out = raster_out.GetRasterBand(1)
+        band_out.WriteArray(corrected_image)
+        band_out.FlushCache()
+        del band_out
 
 
 def prep_burst(burst_granule: str, work_dir: Optional[Path] = None) -> Path:

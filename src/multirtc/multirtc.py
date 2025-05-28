@@ -4,7 +4,7 @@ from typing import Optional
 
 import isce3
 
-from multirtc.create_rtc import capella_rtc, run_single_job, umbra_rtc
+from multirtc.create_rtc import rtc, umbra_rtc
 from multirtc.define_geogrid import generate_geogrids
 from multirtc.prep_burst import prep_burst
 from multirtc.prep_capella import prep_capella
@@ -45,29 +45,7 @@ def opera_rtc_s1_burst(granule: str, resolution: int = 30, work_dir: Optional[Pa
         apply_static_tropo=True,
     )
     geogrid = generate_geogrids(burst, opts.resolution)
-    capella_rtc(burst, geogrid, opts)
-    # run_single_job(granule, burst, geogrid, opts)
-
-
-def opera_rtc_umbra_sicd(granule: str, resolution: int = 30, work_dir: Optional[Path] = None) -> None:
-    """Create an OPERA RTC for an UMBRA SICD file
-
-    Args:
-        granule: Umbra SICD file name to create an RTC for
-        resolution: Resolution of the output RTC (m)
-        work_dir: Working directory for processing
-    """
-    if work_dir is None:
-        work_dir = Path.cwd()
-    input_dir = work_dir / 'input'
-    output_dir = work_dir / 'output'
-    granule_path = input_dir / granule
-    if not granule_path.exists():
-        raise FileNotFoundError(f'Umbra SICD must be present in input dir {input_dir} for processing.')
-    [d.mkdir(parents=True, exist_ok=True) for d in [input_dir, output_dir]]
-    umbra_sicd, dem_path = prep_umbra(granule_path, work_dir=input_dir)
-    geogrid = generate_geogrids(umbra_sicd, resolution, rda=False)
-    umbra_rtc(umbra_sicd, geogrid, dem_path, output_dir=output_dir)
+    rtc(burst, geogrid, opts)
 
 
 def opera_rtc_capella_sicd(granule: str, resolution: int = 30, work_dir: Optional[Path] = None) -> None:
@@ -95,7 +73,28 @@ def opera_rtc_capella_sicd(granule: str, resolution: int = 30, work_dir: Optiona
         apply_static_tropo=False,
     )
     geogrid = generate_geogrids(capella_sicd, opts.resolution)
-    capella_rtc(capella_sicd, geogrid, opts)
+    rtc(capella_sicd, geogrid, opts)
+
+
+def opera_rtc_umbra_sicd(granule: str, resolution: int = 30, work_dir: Optional[Path] = None) -> None:
+    """Create an OPERA RTC for an UMBRA SICD file
+
+    Args:
+        granule: Umbra SICD file name to create an RTC for
+        resolution: Resolution of the output RTC (m)
+        work_dir: Working directory for processing
+    """
+    if work_dir is None:
+        work_dir = Path.cwd()
+    input_dir = work_dir / 'input'
+    output_dir = work_dir / 'output'
+    granule_path = input_dir / granule
+    if not granule_path.exists():
+        raise FileNotFoundError(f'Umbra SICD must be present in input dir {input_dir} for processing.')
+    [d.mkdir(parents=True, exist_ok=True) for d in [input_dir, output_dir]]
+    umbra_sicd, dem_path = prep_umbra(granule_path, work_dir=input_dir)
+    geogrid = generate_geogrids(umbra_sicd, resolution, rda=False)
+    umbra_rtc(umbra_sicd, geogrid, dem_path, output_dir=output_dir)
 
 
 def main():
