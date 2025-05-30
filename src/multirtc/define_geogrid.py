@@ -10,26 +10,8 @@ ECEF2LLA = pyproj.Transformer.from_crs(ECEF, LLA, always_xy=True)
 
 
 def get_point_epsg(lat, lon):
-    """
-    Get EPSG code based on latitude and longitude
-    coordinates of a point
-
-    Parameters
-    ----------
-    lat: float
-        Latitude coordinate of the point
-    lon: float
-        Longitude coordinate of the point
-
-    Returns
-    -------
-    epsg: int
-        UTM zone, Polar stereographic (North / South)
-    """
-    # "Warp" longitude value into [-180.0, 180.0]
     if (lon >= 180.0) or (lon <= -180.0):
         lon = (lon + 180.0) % 360.0 - 180.0
-
     if lat >= 75.0:
         epsg = 3413
     elif lat <= -75.0:

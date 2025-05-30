@@ -516,44 +516,42 @@ def rtc(slc, geogrid, opts):
     logger.info(f'elapsed time: {t_end - t_start}')
 
 
-def umbra_rtc(umbra_sicd, geogrid, dem_path, output_dir):
+def pfa_prototype_geocode(sicd, geogrid, dem_path, output_dir):
     interp_method = isce3.core.DataInterpMethod.BIQUINTIC
-    sigma0_data = umbra_sicd.load_corrected_data('sigma0')
+    sigma0_data = sicd.load_scaled_data('sigma0', power=True)
     slc_lut = isce3.core.LUT2d(
         np.arange(sigma0_data.shape[1]), np.arange(sigma0_data.shape[0]), sigma0_data, interp_method
     )
-    ecef = pyproj.CRS(4978)  # ECEF on WGS84 Ellipsoid
-    lla = pyproj.CRS(4979)  # WGS84
-    lla2ecef = pyproj.Transformer.from_crs(lla, ecef, always_xy=True)
+    local2ecef = pyproj.Transformer.from_crs(f'EPSG:{geogrid.epsg}', 'EPSG:4978', always_xy=True)
+    local2ll = pyproj.Transformer.from_crs(f'EPSG:{geogrid.epsg}', 'EPSG:4326', always_xy=True)
     dem_raster = isce3.io.Raster(str(dem_path))
     dem = isce3.geometry.DEMInterpolator()
     dem.load_dem(dem_raster)
     dem.interp_method = interp_method
-    output = np.zeros((geogrid.length, geogrid.width), dtype=np.complex64)
+    output = np.zeros((geogrid.length, geogrid.width), dtype=np.float32)
     mask = np.zeros((geogrid.length, geogrid.width), dtype=bool)
 
     n_iters = geogrid.width * geogrid.length
     for i, j in tqdm(itertools.product(range(geogrid.width), range(geogrid.length)), total=n_iters):
         x = geogrid.start_x + (i * geogrid.spacing_x)
         y = geogrid.start_y + (j * geogrid.spacing_y)
+        lon, lat = local2ll.transform(x, y)
         hae = dem.interpolate_lonlat(np.deg2rad(x), np.deg2rad(y))  # ISCE3 expects lat/lon to be in radians!
-        ecef_x, ecef_y, ecef_z = lla2ecef.transform(x, y, hae)
-        row, col = umbra_sicd.geo2rowcol(np.array([(ecef_x, ecef_y, ecef_z)]))[0]
+        ecef_x, ecef_y, ecef_z = local2ecef.transform(x, y, hae)
+        row, col = sicd.geo2rowcol(np.array([(ecef_x, ecef_y, ecef_z)]))[0]
         if slc_lut.contains(row, col):
             output[j, i] = slc_lut.eval(row, col)
             mask[j, i] = 1
 
-    output = 10 * np.log10(output)
     output[mask == 0] = np.nan
-
-    output_path = output_dir / f'{umbra_sicd.id}_{umbra_sicd.polarization}.tif'
+    output_path = output_dir / f'{sicd.id}_{sicd.polarization}.tif'
     driver = gdal.GetDriverByName('GTiff')
     out_ds = driver.Create(str(output_path), geogrid.width, geogrid.length, 1, gdal.GDT_Float32)
     # account for pixel as area
     start_x = geogrid.start_x - (geogrid.spacing_x / 2)
     start_y = geogrid.start_y + (geogrid.spacing_y / 2)
     out_ds.SetGeoTransform([start_x, geogrid.spacing_x, 0, start_y, 0, geogrid.spacing_y])
-    out_ds.SetProjection(pyproj.CRS(4326).to_wkt())
+    out_ds.SetProjection(pyproj.CRS(geogrid.epsg).to_wkt())
     out_ds.GetRasterBand(1).WriteArray(output)
     out_ds.GetRasterBand(1).SetNoDataValue(np.nan)
     out_ds.SetMetadata({'AREA_OR_POINT': 'Area'})
