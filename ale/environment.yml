@@ -1,0 +1,20 @@
+name: multirtc-acc
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  # For running
+  - python
+  - pip
+  - gdal>=3.0
+  - numpy>=1.20
+  - isce3
+  - requests
+  - lxml
+  - shapely
+  - pyproj
+  - pandas
+  - matplotlib
+  - lmfit
+  # For static analysis
+  - ruff

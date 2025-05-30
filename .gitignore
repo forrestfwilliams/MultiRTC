@@ -240,5 +240,6 @@ Sessionx.vim
 tags
 # Persistent undo
 [._]*.un~
+
 # Data
-ale
+ale/umbra*
