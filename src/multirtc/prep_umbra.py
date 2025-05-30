@@ -63,18 +63,33 @@ class UmbraSICD:
             svs.append(isce3.core.StateVector(t, pos, vel_arp))
         return isce3.core.Orbit(svs, sensing_start_isce)
 
-    @staticmethod
-    def calculate_look_angle(arp_ecef, scp_ecef):
-        look_unit = scp_ecef - arp_ecef
-        look_unit = look_unit / np.linalg.norm(look_unit)  # normalize
-        look_unit_horz = look_unit.copy()
-        look_unit_horz[2] = 0.0
-        look_unit_horz /= np.linalg.norm(look_unit_horz)
-        azimuth_rad = np.arctan2(look_unit_horz[0], look_unit_horz[1])  # in radians
-        azimuth = np.rad2deg(azimuth_rad)
-        azimuth = 90 - azimuth
-        azimuth = 360 + azimuth if azimuth < 0 else azimuth
-        return int(np.round(azimuth))
+    def calculate_look_angles(arp_ecef, scp_ecef):
+        # Convert observer ECEF to geodetic lat/lon/alt
+        transformer = pyproj.Transformer.from_crs('EPSG:4978', 'EPSG:4979', always_xy=True)
+        lon_deg, lat_deg, _ = transformer.transform(*scp_ecef)
+
+        # ECEF to ENU rotation matrix centered at the observer
+        sin_lat = np.sin(np.deg2rad(lat_deg))
+        cos_lat = np.cos(np.deg2rad(lat_deg))
+        sin_lon = np.sin(np.deg2rad(lon_deg))
+        cos_lon = np.cos(np.deg2rad(lon_deg))
+        rotation_matrix = np.array(
+            [
+                [-sin_lon, cos_lon, 0],
+                [-sin_lat * cos_lon, -sin_lat * sin_lon, cos_lat],
+                [cos_lat * cos_lon, cos_lat * sin_lon, sin_lat],
+            ]
+        )
+
+        # Transform the LOS vector into ENU frame
+        los = np.subtract(arp_ecef, scp_ecef)
+        topocentric = rotation_matrix @ los
+        east, north, up = topocentric
+
+        # Compute azimuth and elevation
+        azimuth = np.arctan2(east, north) % (2 * np.pi)
+        elevation = np.arcsin(up / np.linalg.norm(topocentric))
+        return np.rad2deg(azimuth), np.rad2deg(elevation)
 
     @staticmethod
     def calculate_range_range_rate_offset(scp_pos, arp_pos, arp_vel, time_coa):
@@ -142,7 +157,11 @@ class UmbraSICD:
         transform_matrix = cls.calculate_transform_matrix(sicd.PFA, coa_time)
         beta0_coeff = sicd.Radiometric.BetaZeroSFPoly.Coefs
         sigma0_coeff = sicd.Radiometric.SigmaZeroSFPoly.Coefs
-        look_angle = cls.calculate_look_angle(arp_pos, scp_pos)
+        center = Point(sicd.GeoData.SCP.LLH.Lon, sicd.GeoData.SCP.LLH.Lat)
+        azimuth_angle, elevation_angle = cls.calculate_look_angles(arp_pos, scp_pos)
+        assert np.isclose(azimuth_angle, sicd.SCPCOA.AzimAng), 'Azimuth angle does not match SCPCOA AzimuthAng'
+        assert np.isclose(elevation_angle, sicd.SCPCOA.GrazeAng), 'Elevation angle does not match SCPCOA ElevationAng'
+        look_angle = int(azimuth_angle + 180) % 360
         umbra_sicd = cls(
             id=Path(file_path).with_suffix('').name,
             file_path=file_path,
@@ -151,12 +170,12 @@ class UmbraSICD:
             wavelength=wavelength,
             polarization=polarization,
             lookside=lookside,
-            look_angle=int(look_angle),
+            look_angle=look_angle,
             incidence_angle=int(np.round(sicd.SCPCOA.IncidenceAng)),
             scp_index=(sicd.ImageData.SCPPixel.Row, sicd.ImageData.SCPPixel.Col),
             scp_time=scp_time,
             scp_pos=scp_pos,
-            center=Point(sicd.GeoData.SCP.LLH.Lon, sicd.GeoData.SCP.LLH.Lat),
+            center=center,
             scp_hae=scp_hae,
             coa_time=coa_time,
             arp_pos=arp_pos,

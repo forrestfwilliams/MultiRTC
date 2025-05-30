@@ -101,13 +101,12 @@ def filter_valid_data(cr_df, data):
     return cr_df
 
 
-def filter_orientation(cr_df, azimuth_angle, margin=135):
-    valid = []
-    for i, row in cr_df.iterrows():
-        angle_diff = row['azm'] - azimuth_angle
-        angle_diff = angle_diff + 360 if angle_diff < -180 else np.abs(angle_diff)
-        valid.append(angle_diff <= margin)
-    cr_df = cr_df[np.array(valid)].reset_index(drop=True)
+def filter_orientation(cr_df, azimuth_angle):
+    looking_east = azimuth_angle < 180
+    if looking_east:
+        cr_df = cr_df[(cr_df['azm'] < 200) & (cr_df['azm'] > 20)].reset_index(drop=True)
+    else:
+        cr_df = cr_df[cr_df['azm'] > 340].reset_index(drop=True)
     return cr_df
 
 
