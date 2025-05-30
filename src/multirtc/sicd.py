@@ -9,6 +9,7 @@ from osgeo import gdal
 from sarpy.io.complex.sicd import SICDReader
 from shapely.geometry import Point, Polygon
 
+from multirtc import define_geogrid
 from multirtc.base import SlcTemplate, to_isce_datetime
 
 
@@ -25,6 +26,7 @@ class SicdSlc:
         self.filepath = Path(sicd_path)
         self.footprint = Polygon([(ic.Lon, ic.Lat) for ic in sicd.GeoData.ImageCorners])
         self.center = Point(sicd.GeoData.SCP.LLH.Lon, sicd.GeoData.SCP.LLH.Lat)
+        self.scp_hae = sicd.GeoData.SCP.LLH.HAE
         self.lookside = 'right' if sicd.SCPCOA.SideOfTrack == 'R' else 'left'
 
         center_frequency = sicd.RadarCollection.TxFrequency.Min + sicd.RadarCollection.TxFrequency.Max / 2
@@ -90,15 +92,17 @@ class SicdSlc:
         """Calculate xrow and ycol SICD."""
         irow = np.tile(np.arange(self.shape[0]), (self.shape[1], 1)).T
         irow -= self.scp_index[0]
-        xrow = irow * self.row_mult
+        xrow = irow * self.spacing[0]
 
         icol = np.tile(np.arange(self.shape[1]), (self.shape[0], 1))
         icol -= self.scp_index[1]
-        ycol = icol * self.col_mult
+        ycol = icol * self.spacing[1]
         return xrow, ycol
 
     def load_data(self):
-        return self.source[:, :]
+        reader = SICDReader(str(self.filepath))
+        data = reader[:, :]
+        return data
 
     def load_scaled_data(self, scale, power=False):
         if scale == 'beta0':
@@ -298,3 +302,31 @@ class SicdPfaSlc(SlcTemplate, SicdSlc):
         rgaz += np.array(self.shift)[:, None]
         row_col = rgaz.T.copy()
         return row_col
+
+    def create_geogrid(self, spacing_meters):
+        epsg_local = define_geogrid.get_point_epsg(self.center.y, self.center.x)
+        ecef = pyproj.CRS(4978)  # ECEF on WGS84 Ellipsoid
+        local = pyproj.CRS(epsg_local)
+        ecef2local = pyproj.Transformer.from_crs(ecef, local, always_xy=True)
+        x_spacing = spacing_meters
+        y_spacing = -1 * spacing_meters
+
+        points = np.array([(0, 0), (0, self.shape[1]), self.shape, (self.shape[0], 0)])
+        geos = self.rowcol2geo(points, hae=self.scp_hae)
+
+        points = np.vstack(ecef2local.transform(geos[:, 0], geos[:, 1], geos[:, 2])).T
+        minx, maxx = np.min(points[:, 0]), np.max(points[:, 0])
+        miny, maxy = np.min(points[:, 1]), np.max(points[:, 1])
+
+        width = (maxx - minx) // x_spacing
+        length = (maxy - miny) // np.abs(y_spacing)
+        geogrid = isce3.product.GeoGridParameters(
+            start_x=float(minx),
+            start_y=float(maxy),
+            spacing_x=float(x_spacing),
+            spacing_y=float(y_spacing),
+            length=int(length),
+            width=int(width),
+            epsg=epsg_local,
+        )
+        return geogrid

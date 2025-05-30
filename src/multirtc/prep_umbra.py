@@ -315,11 +315,6 @@ def prep_umbra(granule_path: Path, work_dir: Optional[Path] = None) -> Path:
     if work_dir is None:
         work_dir = Path.cwd()
     umbra_sicd = SicdPfaSlc(granule_path)
-    # reader = SICDReader(str(granule_path))
-    # sicd = reader.get_sicds_as_tuple()[0]
-    # umbra_sicd = UmbraSICD.from_sarpy_sicd(sicd, granule_path)
-    breakpoint()
-
     dem_path = work_dir / 'dem.tif'
     dem.download_opera_dem_for_footprint(dem_path, umbra_sicd.footprint)
     return umbra_sicd, dem_path

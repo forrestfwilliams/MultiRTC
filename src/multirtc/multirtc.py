@@ -4,7 +4,7 @@ from typing import Optional
 
 import isce3
 
-from multirtc.create_rtc import rtc, umbra_rtc
+from multirtc.create_rtc import pfa_prototype_geocode, rtc
 from multirtc.define_geogrid import generate_geogrids
 from multirtc.prep_burst import prep_burst
 from multirtc.prep_capella import prep_capella
@@ -93,18 +93,19 @@ def opera_rtc_umbra_sicd(granule: str, resolution: int = 30, work_dir: Optional[
         raise FileNotFoundError(f'Umbra SICD must be present in input dir {input_dir} for processing.')
     [d.mkdir(parents=True, exist_ok=True) for d in [input_dir, output_dir]]
     umbra_sicd, dem_path = prep_umbra(granule_path, work_dir=input_dir)
-    geogrid = generate_geogrids(umbra_sicd, resolution, rda=False)
-    umbra_rtc(umbra_sicd, geogrid, dem_path, output_dir=output_dir)
+    geogrid = umbra_sicd.create_geogrid(spacing_meters=resolution)
+    pfa_prototype_geocode(umbra_sicd, geogrid, dem_path, output_dir=output_dir)
 
 
 def main():
     """Create an OPERA RTC for an Umbra SICD SLC granule
 
     Example command:
-    multirtc umbra_image.ntif --resolution 40
+    multirtc UMBRA umbra_image.ntif --resolution 40
     """
+    supported = ['S1', 'UMBRA', 'CAPELLA']
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('platform', choices=['S1', 'UMBRA', 'CAPELLA'], help='Platform to create RTC for')
+    parser.add_argument('platform', choices=supported, help='Platform to create RTC for')
     parser.add_argument('granule', help='Data granule to create an RTC for.')
     parser.add_argument('--resolution', default=30, type=float, help='Resolution of the output RTC (m)')
     parser.add_argument('--work-dir', type=Path, default=None, help='Working directory for processing')
@@ -117,7 +118,7 @@ def main():
     elif args.platform == 'CAPELLA':
         opera_rtc_capella_sicd(args.granule, args.resolution, args.work_dir)
     else:
-        raise NotImplementedError('Only Sentinel-1 burst and Umbra processing are supported at this time')
+        raise ValueError(f'Unsupported platform {args.platform}. Supported platforms are {", ".join(supported)}.')
 
 
 if __name__ == '__main__':
