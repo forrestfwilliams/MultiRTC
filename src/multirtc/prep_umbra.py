@@ -12,6 +12,7 @@ from shapely.geometry import Polygon
 
 from multirtc import dem
 from multirtc.define_geogrid import get_point_epsg
+from multirtc.sicd import SicdPfaSlc
 
 
 def check_poly_order(poly):
@@ -313,9 +314,11 @@ def prep_umbra(granule_path: Path, work_dir: Optional[Path] = None) -> Path:
     """
     if work_dir is None:
         work_dir = Path.cwd()
-    reader = SICDReader(str(granule_path))
-    sicd = reader.get_sicds_as_tuple()[0]
-    umbra_sicd = UmbraSICD.from_sarpy_sicd(sicd, granule_path)
+    umbra_sicd = SicdPfaSlc(granule_path)
+    # reader = SICDReader(str(granule_path))
+    # sicd = reader.get_sicds_as_tuple()[0]
+    # umbra_sicd = UmbraSICD.from_sarpy_sicd(sicd, granule_path)
+    breakpoint()
 
     dem_path = work_dir / 'dem.tif'
     dem.download_opera_dem_for_footprint(dem_path, umbra_sicd.footprint)
