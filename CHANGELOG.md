@@ -9,6 +9,11 @@ and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [0.2.0]
 
 ### Added
+* Cal/Val scripts for performing absolute geolocation error (ALE) assessment
+
+## [0.2.0]
+
+### Added
 * Support for Capella SICD SLC products
 
 ## [0.1.1]
