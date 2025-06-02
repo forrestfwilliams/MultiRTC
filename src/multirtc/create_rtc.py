@@ -10,6 +10,7 @@ from osgeo import gdal
 from scipy import ndimage
 from tqdm import tqdm
 
+from multirtc.define_geogrid import get_point_epsg
 from multirtc.prep_burst import S1BurstSlc
 from multirtc.s1burst_corrections import compute_correction_lut
 from multirtc.sicd import SicdSlc
@@ -522,8 +523,8 @@ def pfa_prototype_geocode(sicd, geogrid, dem_path, output_dir):
     slc_lut = isce3.core.LUT2d(
         np.arange(sigma0_data.shape[1]), np.arange(sigma0_data.shape[0]), sigma0_data, interp_method
     )
-    local2ecef = pyproj.Transformer.from_crs(f'EPSG:{geogrid.epsg}', 'EPSG:4978', always_xy=True)
-    local2ll = pyproj.Transformer.from_crs(f'EPSG:{geogrid.epsg}', 'EPSG:4326', always_xy=True)
+    assert geogrid.epsg == 4326, 'Only EPSG:4326 is supported for PFA prototype geocoding'
+    ll2ecef = pyproj.Transformer.from_crs('EPSG:4326', 'EPSG:4978', always_xy=True)
     dem_raster = isce3.io.Raster(str(dem_path))
     dem = isce3.geometry.DEMInterpolator()
     dem.load_dem(dem_raster)
@@ -535,9 +536,8 @@ def pfa_prototype_geocode(sicd, geogrid, dem_path, output_dir):
     for i, j in tqdm(itertools.product(range(geogrid.width), range(geogrid.length)), total=n_iters):
         x = geogrid.start_x + (i * geogrid.spacing_x)
         y = geogrid.start_y + (j * geogrid.spacing_y)
-        lon, lat = local2ll.transform(x, y)
         hae = dem.interpolate_lonlat(np.deg2rad(x), np.deg2rad(y))  # ISCE3 expects lat/lon to be in radians!
-        ecef_x, ecef_y, ecef_z = local2ecef.transform(x, y, hae)
+        ecef_x, ecef_y, ecef_z = ll2ecef.transform(x, y, hae)
         row, col = sicd.geo2rowcol(np.array([(ecef_x, ecef_y, ecef_z)]))[0]
         if slc_lut.contains(row, col):
             output[j, i] = slc_lut.eval(row, col)
@@ -556,3 +556,6 @@ def pfa_prototype_geocode(sicd, geogrid, dem_path, output_dir):
     out_ds.GetRasterBand(1).SetNoDataValue(np.nan)
     out_ds.SetMetadata({'AREA_OR_POINT': 'Area'})
     out_ds = None
+
+    local_epsg = get_point_epsg(geogrid.start_y, geogrid.start_x)
+    gdal.Warp(str(output_path), str(output_path), dstSRS=f'EPSG:{local_epsg}', format='GTiff')
