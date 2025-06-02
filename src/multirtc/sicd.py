@@ -9,8 +9,8 @@ from osgeo import gdal
 from sarpy.io.complex.sicd import SICDReader
 from shapely.geometry import Point, Polygon
 
-from multirtc import define_geogrid
 from multirtc.base import SlcTemplate, to_isce_datetime
+from multirtc.define_geogrid import get_point_epsg
 
 
 def check_poly_order(poly):
@@ -321,17 +321,24 @@ class SicdPfaSlc(SlcTemplate, SicdSlc):
         return row_col
 
     def create_geogrid(self, spacing_meters):
-        epsg_local = define_geogrid.get_point_epsg(self.center.y, self.center.x)
         ecef = pyproj.CRS(4978)  # ECEF on WGS84 Ellipsoid
-        local = pyproj.CRS(epsg_local)
-        ecef2local = pyproj.Transformer.from_crs(ecef, local, always_xy=True)
-        x_spacing = spacing_meters
-        y_spacing = -1 * spacing_meters
+        lla = pyproj.CRS(4979)  # WGS84 lat/lon/ellipsoid height
+        local_utm = pyproj.CRS(get_point_epsg(self.center.y, self.center.x))
+        lla2utm = pyproj.Transformer.from_crs(lla, local_utm, always_xy=True)
+        utm2lla = pyproj.Transformer.from_crs(local_utm, lla, always_xy=True)
+        ecef2lla = pyproj.Transformer.from_crs(ecef, lla, always_xy=True)
+
+        lla_point = (self.center.x, self.center.y)
+        utm_point = lla2utm.transform(*lla_point)
+        utm_point_shift = (utm_point[0] + spacing_meters, utm_point[1])
+        lla_point_shift = utm2lla.transform(*utm_point_shift)
+        x_spacing = lla_point_shift[0] - lla_point[0]
+        y_spacing = -1 * x_spacing
 
         points = np.array([(0, 0), (0, self.shape[1]), self.shape, (self.shape[0], 0)])
-        geos = self.rowcol2geo(points, hae=self.scp_hae)
+        geos = self.rowcol2geo(points, self.scp_hae)
 
-        points = np.vstack(ecef2local.transform(geos[:, 0], geos[:, 1], geos[:, 2])).T
+        points = np.vstack(ecef2lla.transform(geos[:, 0], geos[:, 1], geos[:, 2])).T
         minx, maxx = np.min(points[:, 0]), np.max(points[:, 0])
         miny, maxy = np.min(points[:, 1]), np.max(points[:, 1])
 
@@ -344,6 +351,6 @@ class SicdPfaSlc(SlcTemplate, SicdSlc):
             spacing_y=float(y_spacing),
             length=int(length),
             width=int(width),
-            epsg=epsg_local,
+            epsg=4326,
         )
         return geogrid
