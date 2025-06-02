@@ -8,6 +8,9 @@ and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.3.1]
 
+### Changed
+* Loading of SICD data during beta0/sigma0 creation to a chunked strategy to reduce memory requirements
+
 ### Fixed
 * Geolocation issue for prototype Umbra workflow related to switching to local UTM zone during processing
 
