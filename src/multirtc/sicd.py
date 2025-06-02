@@ -347,10 +347,3 @@ class SicdPfaSlc(SlcTemplate, SicdSlc):
             epsg=epsg_local,
         )
         return geogrid
-
-
-if __name__ == '__main__':
-    sicd = SicdSlc(
-        Path('/Users/ffwilliams2/Data/capella/input/CAPELLA_C15_SS_SICD_VV_20250225215110_20250225215124.ntf')
-    )
-    sicd.write_complex_beta0('out.tif')

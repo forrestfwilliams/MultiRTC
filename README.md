@@ -2,9 +2,11 @@
 
 A python library for creating ISCE3-based RTCs for multiple SAR data sources
 
-**ALL CREDIT FOR THIS LIBRARY'S RTC ALGORITHM GOES TO GUSTAVO SHIROMA AND THE JPL [OPERA](https://www.jpl.nasa.gov/go/opera/about-opera/) AND [ISCE3](https://github.com/isce-framework/isce3) TEAMS. THIS PLUGIN MERELY ALLOWS OTHERS TO USE THEIR ALGORITHM WITH MULTIPLE SENSORS.**
+> [!WARNING]
+> This package is still in early development. Users are encouraged to not use this package in production or other critical contexts until the v1.0.0 release.
 
-The RTC algorithm utilized by this library is described in [Shiroma et al., 2023](https://doi.org/10.1109/TGRS.2022.3147472).
+> [!IMPORTANT]
+> All credit for this library's RTC algorithm goes to Gustavo Shiroma and the JPL [OPERA](https://www.jpl.nasa.gov/go/opera/about-opera/) and [ISCE3](https://github.com/isce-framework/isce3) teams. This package merely allows others to use their algorithm with a wider set of SAR data sources. The RTC algorithm utilized by this package is described in [Shiroma et al., 2023](https://doi.org/10.1109/TGRS.2022.3147472).
 
 ## Usage
 MultiRTC allows users to create RTC products from SLC data for multiple SAR sensor platforms. Currently this list includes:
