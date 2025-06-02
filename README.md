@@ -36,7 +36,7 @@ Currently, only the OPERA DEM is supported. This is a global Height Above Ellips
 ## When will support for [insert SAR provider here] products be added?
 We're currently working on this package on a "best effort" basis with no specific timeline for any particular dataset. We would love to add support for every SAR dataset ASAP, but we only have so much time to devote to this package. If you want a particular dataset to be prioritized there are several things you can do:
 
-- [Open an issue](https://github.com/forrestfwilliams/multirtc/issues/new) requesting support for your dataset and encourages others to like or comment on it.
+- [Open an issue](https://github.com/forrestfwilliams/multirtc/issues/new) requesting support for your dataset and encourage others to like or comment on it.
 - Provides links to example datasets over the Rosamond, California corner reflector site (Lat/Lon 34.799,-118.095) for performing cal/val.
 - Reach out to us about funding the development required to add your dataset.
 
