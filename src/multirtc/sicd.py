@@ -9,8 +9,8 @@ from osgeo import gdal
 from sarpy.io.complex.sicd import SICDReader
 from shapely.geometry import Point, Polygon
 
-from multirtc import define_geogrid
 from multirtc.base import SlcTemplate, to_isce_datetime
+from multirtc.define_geogrid import get_point_epsg
 
 
 def check_poly_order(poly):
@@ -19,8 +19,8 @@ def check_poly_order(poly):
 
 class SicdSlc:
     def __init__(self, sicd_path):
-        reader = SICDReader(str(sicd_path.expanduser().resolve()))
-        sicd = reader.get_sicds_as_tuple()[0]
+        self.reader = SICDReader(str(sicd_path.expanduser().resolve()))
+        sicd = self.reader.get_sicds_as_tuple()[0]
         self.source = sicd
         self.id = Path(sicd_path).with_suffix('').name
         self.filepath = Path(sicd_path)
@@ -50,7 +50,7 @@ class SicdSlc:
         self.raw_time_coa_poly = sicd.Grid.TimeCOAPoly
         last_line_time = self.raw_time_coa_poly(0, self.shape[1] - self.shift[1])
         first_line_time = self.raw_time_coa_poly(0, -self.shift[1])
-        self.az_reversed = last_line_time > first_line_time
+        self.az_reversed = last_line_time < first_line_time
         self.arp_pos = sicd.SCPCOA.ARPPos.get_array()
         self.scp_pos = sicd.GeoData.SCP.ECF.get_array()
         azimuth_angle, elevation_angle = self.calculate_look_angles()
@@ -88,23 +88,23 @@ class SicdSlc:
         elevation = np.arcsin(up / np.linalg.norm(topocentric))
         return np.rad2deg(azimuth), np.rad2deg(elevation)
 
-    def get_xrow_ycol(self) -> np.ndarray:
+    def get_xrow_ycol(self, rowrange=None, colrange=None) -> np.ndarray:
         """Calculate xrow and ycol SICD."""
-        irow = np.tile(np.arange(self.shape[0]), (self.shape[1], 1)).T
-        irow -= self.scp_index[0]
+        rowlen = self.shape[0] if rowrange is None else rowrange[1] - rowrange[0]
+        collen = self.shape[1] if colrange is None else colrange[1] - colrange[0]
+        rowoffset = self.scp_index[0] if rowrange is None else self.scp_index[0] + rowrange[0]
+        coloffset = self.scp_index[1] if colrange is None else self.scp_index[1] + colrange[0]
+
+        irow = np.tile(np.arange(rowlen), (collen, 1)).T
+        irow -= rowoffset
         xrow = irow * self.spacing[0]
 
-        icol = np.tile(np.arange(self.shape[1]), (self.shape[0], 1))
-        icol -= self.scp_index[1]
+        icol = np.tile(np.arange(collen), (rowlen, 1))
+        icol -= coloffset
         ycol = icol * self.spacing[1]
         return xrow, ycol
 
-    def load_data(self):
-        reader = SICDReader(str(self.filepath))
-        data = reader[:, :]
-        return data
-
-    def load_scaled_data(self, scale, power=False):
+    def load_scaled_data(self, scale, power=False, rowrange=None, colrange=None):
         if scale == 'beta0':
             coeff = self.beta0.Coefs
         elif scale == 'sigma0':
@@ -112,47 +112,45 @@ class SicdSlc:
         else:
             raise ValueError(f'Scale must be either "beta0" or "sigma0", got {scale}')
 
-        xrow, ycol = self.get_xrow_ycol()
-        scale_factor = polyval2d(xrow, ycol, coeff)
-        data = self.load_data()
-        if power:
-            scaled_data = (data.real**2 + data.imag**2) * scale_factor
+        xrow, ycol = self.get_xrow_ycol(rowrange=rowrange, colrange=colrange)
+        if colrange is not None and rowrange is not None:
+            data = self.reader[rowrange[0] : rowrange[1], colrange[0] : colrange[1]]
+        elif colrange is None and rowrange is None:
+            data = self.reader[:, :]
         else:
-            scaled_data = data * np.sqrt(scale_factor)
-        return scaled_data
+            raise ValueError('Both xrange and yrange must be provided or neither.')
 
-    def write_complex_beta0(self, outpath, isce_format=True):
-        scaled_data = self.load_scaled_data('beta0', power=False)
-        if isce_format:
+        scale_factor = polyval2d(xrow, ycol, coeff)
+        del xrow, ycol  # deleting for memory management
+
+        if power:
+            data = (data.real**2 + data.imag**2) * scale_factor
+        else:
+            data = data * np.sqrt(scale_factor)
+        return data
+
+    def create_complex_beta0(self, outpath, row_iter=256):
+        driver = gdal.GetDriverByName('GTiff')
+        # Shape transposed for ISCE3 expectations
+        ds = driver.Create(str(outpath), self.shape[0], self.shape[1], 1, gdal.GDT_CFloat32)
+        band = ds.GetRasterBand(1)
+        n_chunks = int(np.floor(self.shape[0] // row_iter)) + 1
+        for i in range(n_chunks):
+            start_row = i * row_iter
+            end_row = min((i + 1) * row_iter, self.shape[0])
+            rowrange = [start_row, end_row]
+            colrange = [0, self.shape[1]]
+            scaled_data = self.load_scaled_data('beta0', power=False, rowrange=rowrange, colrange=colrange)
+            # Shape transposed for ISCE3 expectations
             if self.az_reversed:
                 scaled_data = scaled_data[:, ::-1].T
             else:
                 scaled_data = scaled_data.T
+            # Offset transposed to match ISCE3 expectations
+            band.WriteArray(scaled_data, xoff=start_row, yoff=0)
 
-        driver = gdal.GetDriverByName('GTiff')
-        ds = driver.Create(str(outpath), scaled_data.shape[1], scaled_data.shape[0], 1, gdal.GDT_CFloat32)
-        band = ds.GetRasterBand(1)
-        band.WriteArray(scaled_data)
         band.FlushCache()
-        ds = None
-
-    def create_complex_beta0(self, outpath, isce_format=True):
-        xrow, ycol = self.get_xrow_ycol()
-        scale_factor = np.sqrt(polyval2d(xrow, ycol, self.beta0_coeff))
-        data = self.load_data()
-        scaled_data = data * scale_factor
-
-        if isce_format:
-            if self.az_reversed:
-                scaled_data = scaled_data[:, ::-1].T
-            else:
-                scaled_data = scaled_data.T
-
-        driver = gdal.GetDriverByName('GTiff')
-        ds = driver.Create(str(outpath), scaled_data.shape[1], scaled_data.shape[0], 1, gdal.GDT_CFloat32)
-        band = ds.GetRasterBand(1)
-        band.WriteArray(scaled_data)
-        band.FlushCache()
+        ds.FlushCache()
         ds = None
 
 
@@ -304,17 +302,24 @@ class SicdPfaSlc(SlcTemplate, SicdSlc):
         return row_col
 
     def create_geogrid(self, spacing_meters):
-        epsg_local = define_geogrid.get_point_epsg(self.center.y, self.center.x)
         ecef = pyproj.CRS(4978)  # ECEF on WGS84 Ellipsoid
-        local = pyproj.CRS(epsg_local)
-        ecef2local = pyproj.Transformer.from_crs(ecef, local, always_xy=True)
-        x_spacing = spacing_meters
-        y_spacing = -1 * spacing_meters
+        lla = pyproj.CRS(4979)  # WGS84 lat/lon/ellipsoid height
+        local_utm = pyproj.CRS(get_point_epsg(self.center.y, self.center.x))
+        lla2utm = pyproj.Transformer.from_crs(lla, local_utm, always_xy=True)
+        utm2lla = pyproj.Transformer.from_crs(local_utm, lla, always_xy=True)
+        ecef2lla = pyproj.Transformer.from_crs(ecef, lla, always_xy=True)
+
+        lla_point = (self.center.x, self.center.y)
+        utm_point = lla2utm.transform(*lla_point)
+        utm_point_shift = (utm_point[0] + spacing_meters, utm_point[1])
+        lla_point_shift = utm2lla.transform(*utm_point_shift)
+        x_spacing = lla_point_shift[0] - lla_point[0]
+        y_spacing = -1 * x_spacing
 
         points = np.array([(0, 0), (0, self.shape[1]), self.shape, (self.shape[0], 0)])
-        geos = self.rowcol2geo(points, hae=self.scp_hae)
+        geos = self.rowcol2geo(points, self.scp_hae)
 
-        points = np.vstack(ecef2local.transform(geos[:, 0], geos[:, 1], geos[:, 2])).T
+        points = np.vstack(ecef2lla.transform(geos[:, 0], geos[:, 1], geos[:, 2])).T
         minx, maxx = np.min(points[:, 0]), np.max(points[:, 0])
         miny, maxy = np.min(points[:, 1]), np.max(points[:, 1])
 
@@ -327,6 +332,6 @@ class SicdPfaSlc(SlcTemplate, SicdSlc):
             spacing_y=float(y_spacing),
             length=int(length),
             width=int(width),
-            epsg=epsg_local,
+            epsg=4326,
         )
         return geogrid
