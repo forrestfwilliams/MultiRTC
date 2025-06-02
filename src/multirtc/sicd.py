@@ -50,7 +50,7 @@ class SicdSlc:
         self.raw_time_coa_poly = sicd.Grid.TimeCOAPoly
         last_line_time = self.raw_time_coa_poly(0, self.shape[1] - self.shift[1])
         first_line_time = self.raw_time_coa_poly(0, -self.shift[1])
-        self.az_reversed = last_line_time > first_line_time
+        self.az_reversed = last_line_time < first_line_time
         self.arp_pos = sicd.SCPCOA.ARPPos.get_array()
         self.scp_pos = sicd.GeoData.SCP.ECF.get_array()
         azimuth_angle, elevation_angle = self.calculate_look_angles()
@@ -129,7 +129,7 @@ class SicdSlc:
             data = data * np.sqrt(scale_factor)
         return data
 
-    def write_complex_beta0(self, outpath, row_iter=256):
+    def create_complex_beta0(self, outpath, row_iter=256):
         driver = gdal.GetDriverByName('GTiff')
         # Shape transposed for ISCE3 expectations
         ds = driver.Create(str(outpath), self.shape[0], self.shape[1], 1, gdal.GDT_CFloat32)
@@ -151,25 +151,6 @@ class SicdSlc:
 
         band.FlushCache()
         ds.FlushCache()
-        ds = None
-
-    def create_complex_beta0(self, outpath, isce_format=True):
-        xrow, ycol = self.get_xrow_ycol()
-        scale_factor = np.sqrt(polyval2d(xrow, ycol, self.beta0_coeff))
-        data = self.load_data()
-        scaled_data = data * scale_factor
-
-        if isce_format:
-            if self.az_reversed:
-                scaled_data = scaled_data[:, ::-1].T
-            else:
-                scaled_data = scaled_data.T
-
-        driver = gdal.GetDriverByName('GTiff')
-        ds = driver.Create(str(outpath), scaled_data.shape[1], scaled_data.shape[0], 1, gdal.GDT_CFloat32)
-        band = ds.GetRasterBand(1)
-        band.WriteArray(scaled_data)
-        band.FlushCache()
         ds = None
 
 
