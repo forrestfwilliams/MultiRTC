@@ -8,7 +8,7 @@ import s1reader
 from burst2safe.burst2safe import burst2safe
 from osgeo import gdal
 
-from multirtc import dem, orbit
+from multirtc import define_geogrid, dem, orbit
 from multirtc.base import SlcTemplate, from_isce_datetime, to_isce_datetime
 
 
@@ -56,6 +56,12 @@ class S1BurstSlc(SlcTemplate):
         self.first_valid_sample = burst.first_valid_sample
         self.last_valid_sample = burst.last_valid_sample
         self.source = burst
+        self.supports_rtc = True
+        self.supports_bistatic_delay = True
+        self.supports_static_tropo = True
+
+    def create_geogrid(self, spacing_meters):
+        return define_geogrid.generate_geogrids(self, spacing_meters)
 
     def apply_valid_data_masking(self):
         # Extract burst boundaries and create sub_swaths object to mask invalid radar samples

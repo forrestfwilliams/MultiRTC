@@ -9,8 +9,8 @@ from osgeo import gdal
 from sarpy.io.complex.sicd import SICDReader
 from shapely.geometry import Point, Polygon
 
+from multirtc import define_geogrid
 from multirtc.base import SlcTemplate, to_isce_datetime
-from multirtc.define_geogrid import get_point_epsg
 
 
 def check_poly_order(poly):
@@ -59,6 +59,8 @@ class SicdSlc:
         self.look_angle = int(azimuth_angle + 180) % 360
         self.beta0 = sicd.Radiometric.BetaZeroSFPoly
         self.sigma0 = sicd.Radiometric.SigmaZeroSFPoly
+        self.supports_bistatic_delay = False
+        self.supports_static_tropo = False
 
     def calculate_look_angles(self):
         # Convert observer ECEF to geodetic lat/lon/alt
@@ -166,6 +168,7 @@ class SicdRzdSlc(SlcTemplate, SicdSlc):
         self.orbit = self.get_orbit()
         self.radar_grid = self.get_radar_grid()
         self.doppler_centroid_grid = isce3.core.LUT2d()
+        self.supports_rtc = True
 
     def get_orbit(self):
         svs = []
@@ -193,6 +196,9 @@ class SicdRzdSlc(SlcTemplate, SicdSlc):
         )
         return radar_grid
 
+    def create_geogrid(self, spacing_meters):
+        return define_geogrid.generate_geogrids(self, spacing_meters)
+
 
 class SicdPfaSlc(SlcTemplate, SicdSlc):
     def __init__(self, sicd_path):
@@ -213,6 +219,7 @@ class SicdPfaSlc(SlcTemplate, SicdSlc):
         self.radar_grid = None
         self.doppler_centroid_grid = None
         self.prf = np.nan
+        self.supports_rtc = False
 
     def get_orbit(self):
         svs = []
@@ -304,7 +311,7 @@ class SicdPfaSlc(SlcTemplate, SicdSlc):
     def create_geogrid(self, spacing_meters):
         ecef = pyproj.CRS(4978)  # ECEF on WGS84 Ellipsoid
         lla = pyproj.CRS(4979)  # WGS84 lat/lon/ellipsoid height
-        local_utm = pyproj.CRS(get_point_epsg(self.center.y, self.center.x))
+        local_utm = pyproj.CRS(define_geogrid.get_point_epsg(self.center.y, self.center.x))
         lla2utm = pyproj.Transformer.from_crs(lla, local_utm, always_xy=True)
         utm2lla = pyproj.Transformer.from_crs(local_utm, lla, always_xy=True)
         ecef2lla = pyproj.Transformer.from_crs(ecef, lla, always_xy=True)
@@ -334,4 +341,5 @@ class SicdPfaSlc(SlcTemplate, SicdSlc):
             width=int(width),
             epsg=4326,
         )
-        return geogrid
+        geogrid_snapped = define_geogrid.snap_geogrid(geogrid, geogrid.spacing_x, geogrid.spacing_y)
+        return geogrid_snapped

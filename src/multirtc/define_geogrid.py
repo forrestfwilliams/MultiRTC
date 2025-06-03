@@ -101,7 +101,7 @@ def get_geogrid_poly(geogrid):
     return poly
 
 
-def generate_geogrids(slc_obj, resolution: int, epsg: int = None, rda: bool = True):
+def generate_geogrids(slc_obj, resolution: int, epsg: int = None):
     """
     Compute the slc geogrid
     """
@@ -109,11 +109,6 @@ def generate_geogrids(slc_obj, resolution: int, epsg: int = None, rda: bool = Tr
     y_spacing = -1 * np.abs(resolution)
     if epsg is None:
         epsg = get_point_epsg(slc_obj.center.y, slc_obj.center.x)
-
-    # if rda:
-    #     radar_grid = slc_obj.as_isce3_radargrid()
-    # else:
-    #     geogrid = slc_obj.get_geogrid(x_spacing, y_spacing)
     geogrid = isce3.product.bbox_to_geogrid(
         slc_obj.radar_grid, slc_obj.orbit, slc_obj.doppler_centroid_grid, x_spacing, y_spacing, epsg
     )

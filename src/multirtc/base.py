@@ -1,4 +1,4 @@
-from abc import ABC
+from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
 
@@ -21,6 +21,8 @@ def from_isce_datetime(dt):
 
 
 class SlcTemplate(ABC):
+    """Template class for SLC objects that defines a common interface and enforces required attributes."""
+
     required_attributes = {
         'id': str,
         'filepath': Path,
@@ -34,6 +36,9 @@ class SlcTemplate(ABC):
         'reference_time': datetime,
         'sensing_start': float,
         'prf': float,
+        'supports_rtc': bool,
+        'supports_bistatic_delay': bool,
+        'supports_static_tropo': bool,
         'orbit': object,  # Replace with actual orbit type
         'radar_grid': object,  # Replace with actual radar grid type
         'doppler_centroid_grid': object,  # Replace with actual doppler centroid grid type
@@ -56,3 +61,20 @@ class SlcTemplate(ABC):
                     )
 
         cls.__init__ = wrapped_init
+
+    @abstractmethod
+    def create_geogrid(self, spacing_meters: int) -> isce3.product.GeoGridParameters:
+        """
+        Create a geogrid for the SLC object with the specified resolution.
+
+        Parameters
+        ----------
+        spacing_meters: int
+            The desired resolution in meters for the geogrid.
+
+        Returns
+        -------
+        isce3.product.GeoGridParameters
+            The geogrid parameters for the SLC object.
+        """
+        pass
