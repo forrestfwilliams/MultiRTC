@@ -1,14 +1,11 @@
 from pathlib import Path
-from shutil import make_archive
-from typing import Optional
 
 import isce3
 import numpy as np
 import s1reader
-from burst2safe.burst2safe import burst2safe
 from osgeo import gdal
 
-from multirtc import define_geogrid, dem, orbit
+from multirtc import define_geogrid
 from multirtc.base import SlcTemplate, from_isce_datetime, to_isce_datetime
 
 
@@ -109,31 +106,3 @@ class S1BurstSlc(SlcTemplate):
         band_out.WriteArray(corrected_image)
         band_out.FlushCache()
         del band_out
-
-
-def prep_burst(burst_granule: str, work_dir: Optional[Path] = None) -> Path:
-    """Prepare data for burst-based processing.
-
-    Args:
-        granule: Sentinel-1 burst SLC granule to create RTC dataset for
-        use_resorb: Use the RESORB orbits instead of the POEORB orbits
-        work_dir: Working directory for processing
-    """
-    if work_dir is None:
-        work_dir = Path.cwd()
-
-    print('Downloading data...')
-
-    if len(list(work_dir.glob('S1*.zip'))) == 0:
-        granule_path = burst2safe(granules=[burst_granule], all_anns=True, work_dir=work_dir)
-        make_archive(base_name=str(granule_path.with_suffix('')), format='zip', base_dir=str(granule_path))
-        granule_path = granule_path.with_suffix('.zip')
-    else:
-        granule_path = work_dir / list(work_dir.glob('S1*.zip'))[0].name
-
-    orbit_path = orbit.get_orbit(granule_path.with_suffix('').name, save_dir=work_dir)
-
-    burst_slc = S1BurstSlc(granule_path, orbit_path, burst_granule)
-    dem_path = work_dir / 'dem.tif'
-    dem.download_opera_dem_for_footprint(dem_path, burst_slc.footprint)
-    return burst_slc, dem_path

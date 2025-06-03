@@ -7,8 +7,8 @@ from burst2safe.burst2safe import burst2safe
 
 from multirtc import dem, orbit
 from multirtc.create_rtc import pfa_prototype_geocode, rtc
-from multirtc.prep_burst import S1BurstSlc
 from multirtc.rtc_options import RtcOptions
+from multirtc.sentinel1 import S1BurstSlc
 from multirtc.sicd import SicdPfaSlc, SicdRzdSlc
 
 
@@ -31,9 +31,7 @@ def prep_dirs(work_dir: Optional[Path] = None) -> tuple[Path, Path]:
     return input_dir, output_dir
 
 
-def run_multirtc(platform: str, granule: str, resolution: int, work_dir: Path) -> None:
-    """Create an OPERA RTC"""
-    input_dir, output_dir = prep_dirs(work_dir)
+def get_slc(platform, granule, input_dir):
     if platform == 'S1':
         safe_path = burst2safe(granules=[granule], all_anns=True, work_dir=input_dir)
         orbit_path = orbit.get_orbit(safe_path.with_suffix('').name, save_dir=input_dir)
@@ -46,7 +44,13 @@ def run_multirtc(platform: str, granule: str, resolution: int, work_dir: Path) -
         slc = sicd_class(granule_path)
     else:
         raise ValueError(f'Unsupported platform {platform}. Supported platforms are S1, CAPELLA, UMBRA.')
+    return slc
 
+
+def run_multirtc(platform: str, granule: str, resolution: int, work_dir: Path) -> None:
+    """Create an OPERA RTC"""
+    input_dir, output_dir = prep_dirs(work_dir)
+    slc = get_slc(platform, granule, input_dir)
     dem_path = input_dir / 'dem.tif'
     dem.download_opera_dem_for_footprint(dem_path, slc.footprint)
     geogrid = slc.create_geogrid(spacing_meters=resolution)
