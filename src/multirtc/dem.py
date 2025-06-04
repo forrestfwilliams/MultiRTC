@@ -13,7 +13,15 @@ gdal.UseExceptions()
 URL = 'https://nisar.asf.earthdatacloud.nasa.gov/STATIC/DEM/v1.1/EPSG4326'
 
 
-def check_antimeridean(poly):
+def check_antimeridean(poly: Polygon) -> list[Polygon]:
+    """Check if the polygon crosses the antimeridian and split the polygon if it does.
+
+    Args:
+        poly: Polygon object to check for antimeridian crossing.
+
+    Returns:
+        List of Polygon objects, split if necessary.
+    """
     x_min, _, x_max, _ = poly.bounds
 
     # Check anitmeridean crossing
@@ -51,6 +59,15 @@ def check_antimeridean(poly):
 
 
 def get_dem_granule_url(lat: int, lon: int) -> str:
+    """Generate the URL for the OPERA DEM granule based on latitude and longitude.
+
+    Args:
+        lat: Latitude in degrees.
+        lon: Longitude in degrees.
+
+    Returns:
+        URL string for the DEM granule.
+    """
     lat_tens = np.floor_divide(lat, 10) * 10
     lat_cardinal = 'S' if lat_tens < 0 else 'N'
 
@@ -63,14 +80,30 @@ def get_dem_granule_url(lat: int, lon: int) -> str:
     return file_url
 
 
-def get_latlon_pairs(polygon: Polygon) -> list:
+def get_latlon_pairs(polygon: Polygon) -> list[tuple[float, float]]:
+    """Get latitude and longitude pairs for the bounding box of a polygon.
+
+    Args:
+        polygon: Polygon object representing the area of interest.
+
+    Returns:
+        List of tuples containing latitude and longitude pairs for each point of the bounding box.
+    """
     minx, miny, maxx, maxy = polygon.bounds
     lats = np.arange(np.floor(miny), np.floor(maxy) + 1).astype(int)
     lons = np.arange(np.floor(minx), np.floor(maxx) + 1).astype(int)
     return list(product(lats, lons))
 
 
-def download_opera_dem_for_footprint(output_path, footprint, buffer=0.2):
+def download_opera_dem_for_footprint(output_path: Path, footprint: Polygon, buffer: float = 0.2) -> None:
+    """
+    Download the OPERA DEM for a given footprint and save it to the specified output path.
+
+    Args:
+        output_path: Path where the DEM will be saved.
+        footprint: Polygon representing the area of interest.
+        buffer: Buffer distance in degrees to extend the footprint.
+    """
     output_dir = output_path.parent
     if output_path.exists():
         return output_path
@@ -93,4 +126,3 @@ def download_opera_dem_for_footprint(output_path, footprint, buffer=0.2):
 
     ds = None
     [Path(f).unlink() for f in input_files + [vrt_filepath]]
-    return output_path
