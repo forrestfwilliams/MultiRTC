@@ -7,6 +7,7 @@ import numpy as np
 @dataclass
 class RtcOptions:
     """Options for RTC processing using ISCE3."""
+
     output_dir: str
     dem_path: str
     apply_rtc: bool = True
