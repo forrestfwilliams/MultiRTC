@@ -6,14 +6,16 @@ import s1reader
 from osgeo import gdal
 
 from multirtc import define_geogrid
-from multirtc.base import SlcTemplate, from_isce_datetime, to_isce_datetime
+from multirtc.base import Slc, from_isce_datetime, to_isce_datetime
 
 
 gdal.UseExceptions()
 
 
-class S1BurstSlc(SlcTemplate):
-    def __init__(self, safe_path, orbit_path, burst_name):
+class S1BurstSlc(Slc):
+    """Class representing a Sentinel-1 burst SLC (Single Look Complex) product."""
+
+    def __init__(self, safe_path: Path, orbit_path: Path, burst_name: str):
         _, burst_id, swath, _, polarization, _ = burst_name.split('_')
         burst_id = int(burst_id)
         swath_num = int(swath[2])
@@ -26,6 +28,7 @@ class S1BurstSlc(SlcTemplate):
         self.filepath = vrt_path
         self.footprint = burst.border[0]
         self.center = burst.center
+        self.local_epsg = define_geogrid.get_point_epsg(self.center.y, self.center.x)
         self.lookside = 'right'
         self.wavelength = burst.wavelength
         self.polarization = burst.polarization
@@ -57,11 +60,15 @@ class S1BurstSlc(SlcTemplate):
         self.supports_bistatic_delay = True
         self.supports_static_tropo = True
 
-    def create_geogrid(self, spacing_meters):
-        return define_geogrid.generate_geogrids(self, spacing_meters)
+    def create_geogrid(self, spacing_meters: int) -> isce3.product.GeoGridParameters:
+        return define_geogrid.generate_geogrids(self, spacing_meters, self.local_epsg)
 
-    def apply_valid_data_masking(self):
-        # Extract burst boundaries and create sub_swaths object to mask invalid radar samples
+    def apply_valid_data_masking(self) -> isce3.product.SubSwaths:
+        """Extract burst boundaries and create sub_swaths object to mask invalid radar samples.
+
+        Returns:
+           SubSwaths object with valid samples set according to the burst boundaries.
+        """
         n_subswaths = 1
         sub_swaths = isce3.product.SubSwaths(self.radar_grid.length, self.radar_grid.width, n_subswaths)
         last_range_sample = min([self.last_valid_sample, self.radar_grid.width])
@@ -76,8 +83,13 @@ class S1BurstSlc(SlcTemplate):
         sub_swaths.set_valid_samples_array(1, valid_samples_sub_swath)
         return sub_swaths
 
-    def create_complex_beta0(self, outpath: Path, flag_thermal_correction: bool = True):
-        """Apply conversion to beta0 and optionally applies a thermal correction."""
+    def create_complex_beta0(self, outpath: Path, flag_thermal_correction: bool = True) -> None:
+        """Apply conversion to beta0 and optionally apply a thermal noise correction.
+
+        Args:
+            outpath: Path to save the corrected beta0 image.
+            flag_thermal_correction: If True, apply thermal noise correction using the LUT from the source burst.
+        """
         # Load the SLC of the burst
         slc_gdal_ds = gdal.Open(str(self.filepath))
         arr_slc_from = slc_gdal_ds.ReadAsArray()

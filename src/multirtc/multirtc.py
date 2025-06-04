@@ -2,27 +2,26 @@ import argparse
 from pathlib import Path
 from typing import Optional
 
-import isce3
 from burst2safe.burst2safe import burst2safe
+from s1reader.s1_orbit import retrieve_orbit_file
 
-from multirtc import dem, orbit
+from multirtc import dem
+from multirtc.base import Slc
 from multirtc.create_rtc import pfa_prototype_geocode, rtc
 from multirtc.rtc_options import RtcOptions
 from multirtc.sentinel1 import S1BurstSlc
 from multirtc.sicd import SicdPfaSlc, SicdRzdSlc
 
 
-def print_wkt(sicd):
-    radar_grid = sicd.as_isce3_radargrid()
-    dem = isce3.geometry.DEMInterpolator(sicd.hae)
-    doppler = sicd.get_doppler_centroid_grid()
-    wkt = isce3.geometry.get_geo_perimeter_wkt(
-        grid=radar_grid, orbit=sicd.orbit, doppler=doppler, dem=dem, points_per_edge=3
-    )
-    print(wkt)
-
-
 def prep_dirs(work_dir: Optional[Path] = None) -> tuple[Path, Path]:
+    """Prepare input and output directories for processing.
+
+    Args:
+        work_dir: Working directory. If None, current working directory is used.
+
+    Returns:
+        Tuple of input and output directories.
+    """
     if work_dir is None:
         work_dir = Path.cwd()
     input_dir = work_dir / 'input'
@@ -31,10 +30,21 @@ def prep_dirs(work_dir: Optional[Path] = None) -> tuple[Path, Path]:
     return input_dir, output_dir
 
 
-def get_slc(platform, granule, input_dir):
+def get_slc(platform: str, granule: str, input_dir: Path) -> Slc:
+    """
+    Get the SLC object for the specified platform and granule.
+
+    Args:
+        platform: Platform type (e.g., 'UMBRA').
+        granule: Granule name if data is available in ASF archive, or filename if granule is already downloaded.
+        input_dir: Directory containing the input data.
+
+    Returns:
+        Slc subclass object for the specified platform and granule.
+    """
     if platform == 'S1':
         safe_path = burst2safe(granules=[granule], all_anns=True, work_dir=input_dir)
-        orbit_path = orbit.get_orbit(safe_path.with_suffix('').name, save_dir=input_dir)
+        orbit_path = Path(retrieve_orbit_file(safe_path.name, str(input_dir), concatenate=True))
         slc = S1BurstSlc(safe_path, orbit_path, granule)
     elif platform in ['CAPELLA', 'UMBRA']:
         sicd_class = {'CAPELLA': SicdRzdSlc, 'UMBRA': SicdPfaSlc}[platform]
@@ -48,7 +58,14 @@ def get_slc(platform, granule, input_dir):
 
 
 def run_multirtc(platform: str, granule: str, resolution: int, work_dir: Path) -> None:
-    """Create an OPERA RTC"""
+    """Create an RTC or Geocoded dataset using the OPERA algorithm.
+
+    Args:
+        platform: Platform type (e.g., 'UMBRA').
+        granule: Granule name if data is available in ASF archive, or filename if granule is already downloaded.
+        resolution: Resolution of the output RTC (in meters).
+        work_dir: Working directory for processing.
+    """
     input_dir, output_dir = prep_dirs(work_dir)
     slc = get_slc(platform, granule, input_dir)
     dem_path = input_dir / 'dem.tif'
@@ -68,7 +85,7 @@ def run_multirtc(platform: str, granule: str, resolution: int, work_dir: Path) -
 
 
 def main():
-    """Create an OPERA RTC for a multiple satellite platforms
+    """Create a RTC or geocoded dataset for a multiple satellite platforms
 
     Example command:
     multirtc UMBRA umbra_image.ntif --resolution 40

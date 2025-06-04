@@ -14,7 +14,7 @@ dependencies:
   - lxml
   - shapely
   - pyproj
-  - s1reader>=0.2.4
+  - s1reader>=0.2.5
   - sarpy
   - burst2safe
   - tqdm

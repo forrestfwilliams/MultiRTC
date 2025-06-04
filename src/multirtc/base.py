@@ -7,7 +7,7 @@ import numpy as np
 from shapely.geometry import Point, Polygon
 
 
-def to_isce_datetime(dt):
+def to_isce_datetime(dt: datetime | np.datetime64) -> isce3.core.DateTime:
     if isinstance(dt, datetime):
         return isce3.core.DateTime(dt)
     elif isinstance(dt, np.datetime64):
@@ -16,11 +16,11 @@ def to_isce_datetime(dt):
         raise ValueError(f'Unsupported datetime type: {type(dt)}. Expected datetime or np.datetime64.')
 
 
-def from_isce_datetime(dt):
+def from_isce_datetime(dt: isce3.core.DateTime) -> datetime:
     return datetime.fromisoformat(dt.isoformat())
 
 
-class SlcTemplate(ABC):
+class Slc(ABC):
     """Template class for SLC objects that defines a common interface and enforces required attributes."""
 
     required_attributes = {
@@ -67,14 +67,10 @@ class SlcTemplate(ABC):
         """
         Create a geogrid for the SLC object with the specified resolution.
 
-        Parameters
-        ----------
-        spacing_meters: int
-            The desired resolution in meters for the geogrid.
+        Args:
+            spacing_meters: Pixel spacing in meters for the geogrid.
 
-        Returns
-        -------
-        isce3.product.GeoGridParameters
+        Returns:
             The geogrid parameters for the SLC object.
         """
         pass
