@@ -18,6 +18,12 @@ def check_poly_order(poly):
     assert len(poly.Coefs) == poly.order1 + 1, 'Polynomial order does not match number of coefficients'
 
 
+def calculate_range(scp_ecef, row_uvect, row_shift, arp_ecef):
+    starting_row_pos = scp_ecef + (row_uvect * row_shift)
+    starting_range = np.linalg.norm(arp_ecef - starting_row_pos)
+    return starting_range
+
+
 class SicdSlc:
     """Base class for SICD SLCs."""
 
@@ -45,11 +51,6 @@ class SicdSlc:
             sicd.ImageData.SCPPixel.Col - sicd.ImageData.FirstCol,
         )
         self.arp_pos_poly = sicd.Position.ARPPoly
-        starting_row_pos = (
-            sicd.GeoData.SCP.ECF.get_array()
-            + sicd.Grid.Row.UVectECF.get_array() * (0 - self.shift[0]) * self.spacing[0]
-        )
-        self.starting_range = np.linalg.norm(sicd.SCPCOA.ARPPos.get_array() - starting_row_pos)
         self.raw_time_coa_poly = sicd.Grid.TimeCOAPoly
         self.arp_pos = sicd.SCPCOA.ARPPos.get_array()
         self.scp_pos = sicd.GeoData.SCP.ECF.get_array()
@@ -162,11 +163,17 @@ class SicdRzdSlc(Slc, SicdSlc):
     def __init__(self, sicd_path: Path):
         super().__init__(sicd_path)
         assert self.source.Grid.Type == 'RGZERO', 'Only range zero doppler grids are supported for by this class'
-        first_col_time = self.source.RMA.INCA.TimeCAPoly(0 - self.shift[1])
+        first_col_time = self.source.RMA.INCA.TimeCAPoly(-self.shift[1])
         last_col_time = self.source.RMA.INCA.TimeCAPoly(self.shape[1] - self.shift[1])
         self.az_reversed = last_col_time < first_col_time
         self.sensing_start = min(first_col_time, last_col_time)
         self.sensing_end = max(first_col_time, last_col_time)
+        self.starting_range = calculate_range(
+            self.source.GeoData.SCP.ECF.get_array(),
+            self.source.Grid.Row.UVectECF.get_array(),
+            -self.shift[0] * self.spacing[0],
+            self.arp_pos_poly(self.source.RMA.INCA.TimeCAPoly(0)),
+        )
         self.az_reversed = last_col_time < first_col_time
         self.prf = self.shape[1] / (self.sensing_end - self.sensing_start)
         self.orbit = self.get_orbit()
@@ -234,6 +241,12 @@ class SicdPfaSlc(Slc, SicdSlc):
         self.rrdot_offset = self.calculate_range_range_rate_offset()
         self.transform_matrix = self.calculate_transform_matrix()
         self.transform_matrix_inv = np.linalg.inv(self.transform_matrix)
+        self.starting_range = calculate_range(
+            self.source.GeoData.SCP.ECF.get_array(),
+            self.source.Grid.Row.UVectECF.get_array(),
+            -self.shift[0] * self.spacing[0],
+            self.source.SCPCOA.ARPPos.get_array(),
+        )
         # TOOD: this may not always be true, will need to figure out a way to check
         self.az_reversed = False
         # Without ISCE3 support for PFA grids, these properties are undefined
