@@ -13,6 +13,9 @@ from multirtc.sentinel1 import S1BurstSlc
 from multirtc.sicd import SicdPfaSlc, SicdRzdSlc
 
 
+SUPPORTED = ['S1', 'UMBRA', 'CAPELLA', 'ICEYE']
+
+
 def prep_dirs(work_dir: Optional[Path] = None) -> tuple[Path, Path]:
     """Prepare input and output directories for processing.
 
@@ -46,14 +49,14 @@ def get_slc(platform: str, granule: str, input_dir: Path) -> Slc:
         safe_path = burst2safe(granules=[granule], all_anns=True, work_dir=input_dir)
         orbit_path = Path(retrieve_orbit_file(safe_path.name, str(input_dir), concatenate=True))
         slc = S1BurstSlc(safe_path, orbit_path, granule)
-    elif platform in ['CAPELLA', 'UMBRA']:
-        sicd_class = {'CAPELLA': SicdRzdSlc, 'UMBRA': SicdPfaSlc}[platform]
+    elif platform in ['CAPELLA', 'ICEYE', 'UMBRA']:
+        sicd_class = {'CAPELLA': SicdRzdSlc, 'ICEYE': SicdRzdSlc, 'UMBRA': SicdPfaSlc}[platform]
         granule_path = input_dir / granule
         if not granule_path.exists():
             raise FileNotFoundError(f'SICD must be present in input dir {input_dir} for processing.')
         slc = sicd_class(granule_path)
     else:
-        raise ValueError(f'Unsupported platform {platform}. Supported platforms are S1, CAPELLA, UMBRA.')
+        raise ValueError(f'Unsupported platform {platform}. Supported platforms are {",".join(SUPPORTED)}.')
     return slc
 
 
@@ -90,9 +93,8 @@ def main():
     Example command:
     multirtc UMBRA umbra_image.ntif --resolution 40
     """
-    supported = ['S1', 'UMBRA', 'CAPELLA']
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('platform', choices=supported, help='Platform to create RTC for')
+    parser.add_argument('platform', choices=SUPPORTED, help='Platform to create RTC for')
     parser.add_argument('granule', help='Data granule to create an RTC for.')
     parser.add_argument('--resolution', default=30, type=float, help='Resolution of the output RTC (m)')
     parser.add_argument('--work-dir', type=Path, default=None, help='Working directory for processing')

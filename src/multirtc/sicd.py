@@ -11,7 +11,7 @@ from sarpy.io.complex.sicd import SICDReader
 from shapely.geometry import Point, Polygon
 
 from multirtc import define_geogrid
-from multirtc.base import Slc, to_isce_datetime
+from multirtc.base import Slc, print_wkt, to_isce_datetime
 
 
 def check_poly_order(poly):
@@ -51,9 +51,6 @@ class SicdSlc:
         )
         self.starting_range = np.linalg.norm(sicd.SCPCOA.ARPPos.get_array() - starting_row_pos)
         self.raw_time_coa_poly = sicd.Grid.TimeCOAPoly
-        last_line_time = self.raw_time_coa_poly(0, self.shape[1] - self.shift[1])
-        first_line_time = self.raw_time_coa_poly(0, -self.shift[1])
-        self.az_reversed = last_line_time < first_line_time
         self.arp_pos = sicd.SCPCOA.ARPPos.get_array()
         self.scp_pos = sicd.GeoData.SCP.ECF.get_array()
         self.look_angle = int(sicd.SCPCOA.AzimAng + 180) % 360
@@ -167,6 +164,7 @@ class SicdRzdSlc(Slc, SicdSlc):
         assert self.source.Grid.Type == 'RGZERO', 'Only range zero doppler grids are supported for by this class'
         first_col_time = self.source.RMA.INCA.TimeCAPoly(0 - self.shift[1])
         last_col_time = self.source.RMA.INCA.TimeCAPoly(self.shape[1] - self.shift[1])
+        self.az_reversed = last_col_time < first_col_time
         self.sensing_start = min(first_col_time, last_col_time)
         self.sensing_end = max(first_col_time, last_col_time)
         self.prf = self.shape[1] / (self.sensing_end - self.sensing_start)
@@ -214,6 +212,9 @@ class SicdRzdSlc(Slc, SicdSlc):
     def create_geogrid(self, spacing_meters: int) -> isce3.product.GeoGridParameters:
         return define_geogrid.generate_geogrids(self, spacing_meters, self.local_epsg)
 
+    def _print_wkt(self):
+        return print_wkt(self)
+
 
 class SicdPfaSlc(Slc, SicdSlc):
     """Class for SICD SLCs with PFA (Polar Format Algorithm) grids."""
@@ -236,6 +237,7 @@ class SicdPfaSlc(Slc, SicdSlc):
         self.radar_grid = None
         self.doppler_centroid_grid = None
         self.prf = np.nan
+        self.az_reversed = False
         self.supports_rtc = False
 
     def get_orbit(self) -> isce3.core.Orbit:
