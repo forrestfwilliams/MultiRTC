@@ -163,8 +163,8 @@ class SicdRzdSlc(Slc, SicdSlc):
     def __init__(self, sicd_path: Path):
         super().__init__(sicd_path)
         assert self.source.Grid.Type == 'RGZERO', 'Only range zero doppler grids are supported for by this class'
-        first_col_time = self.source.RMA.INCA.TimeCAPoly(-self.shift[1])
-        last_col_time = self.source.RMA.INCA.TimeCAPoly(self.shape[1] - self.shift[1])
+        first_col_time = self.source.RMA.INCA.TimeCAPoly(-self.shift[1] * self.spacing[1])
+        last_col_time = self.source.RMA.INCA.TimeCAPoly((self.shape[1] - self.shift[1]) * self.spacing[1])
         self.az_reversed = last_col_time < first_col_time
         self.sensing_start = min(first_col_time, last_col_time)
         self.sensing_end = max(first_col_time, last_col_time)
@@ -241,15 +241,10 @@ class SicdPfaSlc(Slc, SicdSlc):
         self.rrdot_offset = self.calculate_range_range_rate_offset()
         self.transform_matrix = self.calculate_transform_matrix()
         self.transform_matrix_inv = np.linalg.inv(self.transform_matrix)
-        self.starting_range = calculate_range(
-            self.source.GeoData.SCP.ECF.get_array(),
-            self.source.Grid.Row.UVectECF.get_array(),
-            -self.shift[0] * self.spacing[0],
-            self.source.SCPCOA.ARPPos.get_array(),
-        )
         # TOOD: this may not always be true, will need to figure out a way to check
         self.az_reversed = False
         # Without ISCE3 support for PFA grids, these properties are undefined
+        self.starting_range = np.nan
         self.radar_grid = None
         self.doppler_centroid_grid = None
         self.prf = np.nan
