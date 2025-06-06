@@ -20,6 +20,16 @@ def from_isce_datetime(dt: isce3.core.DateTime) -> datetime:
     return datetime.fromisoformat(dt.isoformat())
 
 
+def print_wkt(slc):
+    radar_grid = slc.radar_grid
+    dem = isce3.geometry.DEMInterpolator(slc.scp_hae)
+    doppler = slc.doppler_centroid_grid
+    wkt = isce3.geometry.get_geo_perimeter_wkt(
+        grid=radar_grid, orbit=slc.orbit, doppler=doppler, dem=dem, points_per_edge=3
+    )
+    print(wkt)
+
+
 class Slc(ABC):
     """Template class for SLC objects that defines a common interface and enforces required attributes."""
 

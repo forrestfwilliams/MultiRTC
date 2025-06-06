@@ -11,11 +11,17 @@ from sarpy.io.complex.sicd import SICDReader
 from shapely.geometry import Point, Polygon
 
 from multirtc import define_geogrid
-from multirtc.base import Slc, to_isce_datetime
+from multirtc.base import Slc, print_wkt, to_isce_datetime
 
 
 def check_poly_order(poly):
     assert len(poly.Coefs) == poly.order1 + 1, 'Polynomial order does not match number of coefficients'
+
+
+def calculate_range(scp_ecef, row_uvect, row_shift, arp_ecef):
+    starting_row_pos = scp_ecef + (row_uvect * row_shift)
+    starting_range = np.linalg.norm(arp_ecef - starting_row_pos)
+    return starting_range
 
 
 class SicdSlc:
@@ -45,11 +51,6 @@ class SicdSlc:
             sicd.ImageData.SCPPixel.Col - sicd.ImageData.FirstCol,
         )
         self.arp_pos_poly = sicd.Position.ARPPoly
-        starting_row_pos = (
-            sicd.GeoData.SCP.ECF.get_array()
-            + sicd.Grid.Row.UVectECF.get_array() * (0 - self.shift[0]) * self.spacing[0]
-        )
-        self.starting_range = np.linalg.norm(sicd.SCPCOA.ARPPos.get_array() - starting_row_pos)
         self.raw_time_coa_poly = sicd.Grid.TimeCOAPoly
         self.arp_pos = sicd.SCPCOA.ARPPos.get_array()
         self.scp_pos = sicd.GeoData.SCP.ECF.get_array()
@@ -162,10 +163,17 @@ class SicdRzdSlc(Slc, SicdSlc):
     def __init__(self, sicd_path: Path):
         super().__init__(sicd_path)
         assert self.source.Grid.Type == 'RGZERO', 'Only range zero doppler grids are supported for by this class'
-        first_col_time = self.source.RMA.INCA.TimeCAPoly(0 - self.shift[1])
-        last_col_time = self.source.RMA.INCA.TimeCAPoly(self.shape[1] - self.shift[1])
+        first_col_time = self.source.RMA.INCA.TimeCAPoly(-self.shift[1] * self.spacing[1])
+        last_col_time = self.source.RMA.INCA.TimeCAPoly((self.shape[1] - self.shift[1]) * self.spacing[1])
+        self.az_reversed = last_col_time < first_col_time
         self.sensing_start = min(first_col_time, last_col_time)
         self.sensing_end = max(first_col_time, last_col_time)
+        self.starting_range = calculate_range(
+            self.source.GeoData.SCP.ECF.get_array(),
+            self.source.Grid.Row.UVectECF.get_array(),
+            -self.shift[0] * self.spacing[0],
+            self.arp_pos_poly(self.source.RMA.INCA.TimeCAPoly(0)),
+        )
         self.az_reversed = last_col_time < first_col_time
         self.prf = self.shape[1] / (self.sensing_end - self.sensing_start)
         self.orbit = self.get_orbit()
@@ -212,6 +220,9 @@ class SicdRzdSlc(Slc, SicdSlc):
     def create_geogrid(self, spacing_meters: int) -> isce3.product.GeoGridParameters:
         return define_geogrid.generate_geogrids(self, spacing_meters, self.local_epsg)
 
+    def _print_wkt(self):
+        return print_wkt(self)
+
 
 class SicdPfaSlc(Slc, SicdSlc):
     """Class for SICD SLCs with PFA (Polar Format Algorithm) grids."""
@@ -233,9 +244,11 @@ class SicdPfaSlc(Slc, SicdSlc):
         # TOOD: this may not always be true, will need to figure out a way to check
         self.az_reversed = False
         # Without ISCE3 support for PFA grids, these properties are undefined
+        self.starting_range = np.nan
         self.radar_grid = None
         self.doppler_centroid_grid = None
         self.prf = np.nan
+        self.az_reversed = False
         self.supports_rtc = False
 
     def get_orbit(self) -> isce3.core.Orbit:
