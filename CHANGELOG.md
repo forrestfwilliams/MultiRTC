@@ -8,6 +8,9 @@ and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.3.2]
 
+### Added
+* ICEYE support
+
 ### Changed
 * Refactored library to reduce code duplication and simplify structure
 
