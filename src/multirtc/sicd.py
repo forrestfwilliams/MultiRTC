@@ -51,9 +51,6 @@ class SicdSlc:
         )
         self.starting_range = np.linalg.norm(sicd.SCPCOA.ARPPos.get_array() - starting_row_pos)
         self.raw_time_coa_poly = sicd.Grid.TimeCOAPoly
-        last_line_time = self.raw_time_coa_poly(0, self.shape[1] - self.shift[1])
-        first_line_time = self.raw_time_coa_poly(0, -self.shift[1])
-        self.az_reversed = last_line_time < first_line_time
         self.arp_pos = sicd.SCPCOA.ARPPos.get_array()
         self.scp_pos = sicd.GeoData.SCP.ECF.get_array()
         self.look_angle = int(sicd.SCPCOA.AzimAng + 180) % 360
@@ -169,6 +166,7 @@ class SicdRzdSlc(Slc, SicdSlc):
         last_col_time = self.source.RMA.INCA.TimeCAPoly(self.shape[1] - self.shift[1])
         self.sensing_start = min(first_col_time, last_col_time)
         self.sensing_end = max(first_col_time, last_col_time)
+        self.az_reversed = last_col_time < first_col_time
         self.prf = self.shape[1] / (self.sensing_end - self.sensing_start)
         self.orbit = self.get_orbit()
         self.radar_grid = self.get_radar_grid()
@@ -232,6 +230,8 @@ class SicdPfaSlc(Slc, SicdSlc):
         self.rrdot_offset = self.calculate_range_range_rate_offset()
         self.transform_matrix = self.calculate_transform_matrix()
         self.transform_matrix_inv = np.linalg.inv(self.transform_matrix)
+        # TOOD: this may not always be true, will need to figure out a way to check
+        self.az_reversed = False
         # Without ISCE3 support for PFA grids, these properties are undefined
         self.radar_grid = None
         self.doppler_centroid_grid = None
