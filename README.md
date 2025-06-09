@@ -14,6 +14,7 @@ MultiRTC allows users to create RTC products from SLC data for multiple SAR sens
 Full RTC:
 - [Sentinel-1 Burst SLCs](https://www.earthdata.nasa.gov/data/catalog/alaska-satellite-facility-distributed-active-archive-center-sentinel-1-bursts-version)
 - [Capella SICD SLCs](https://www.capellaspace.com/earth-observation/data)
+- [ICEYE SICD SLCs](https://sar.iceye.com/5.0/productFormats/slc/)
 
 Geocode Only:
 - [UMBRA SICD SLCs](https://help.umbra.space/product-guide/umbra-products/umbra-product-specifications)
@@ -23,7 +24,7 @@ To create an RTC, use the `multirtc` CLI entrypoint using the following pattern:
 ```bash
 multirtc PLATFORM SLC-GRANULE --resolution RESOLUTION --work-dir WORK-DIR
 ```
-Where `PLATFORM` is the name of the satellite platform (currently `S1`, `CAPELLA` or `UMBRA`), `SLC-GRANULE` is the name of the SLC granule, `RESOLUTION` is the desired output resolution of the RTC image in meters, and `WORK-DIR` is the name of the working directory to perform processing in. Inputs such as the SLC data, DEM, and external orbit information are stored in `WORK-DIR/input`, while the RTC image and associated outputs are stored in `WORK-DIR/output` once processing is complete. SLC data that is available in the [Alaska Satellite Facility's data archive](https://search.asf.alaska.edu/#/?maxResults=250) (such as Sentinel-1 Burst SLCs) will be automatically downloaded to the input directory, but data not available in this archive (commercial datasets) are required to be staged in the input directory prior to processing.
+Where `PLATFORM` is the name of the satellite platform (currently `S1`, `CAPELLA`, `ICEYE` or `UMBRA`), `SLC-GRANULE` is the name of the SLC granule, `RESOLUTION` is the desired output resolution of the RTC image in meters, and `WORK-DIR` is the name of the working directory to perform processing in. Inputs such as the SLC data, DEM, and external orbit information are stored in `WORK-DIR/input`, while the RTC image and associated outputs are stored in `WORK-DIR/output` once processing is complete. SLC data that is available in the [Alaska Satellite Facility's data archive](https://search.asf.alaska.edu/#/?maxResults=250) (such as Sentinel-1 Burst SLCs) will be automatically downloaded to the input directory, but data not available in this archive (commercial datasets) are required to be staged in the input directory prior to processing.
 
 Output RTC pixel values represent gamma0 power.
 
