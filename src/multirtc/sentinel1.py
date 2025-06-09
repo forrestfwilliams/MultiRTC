@@ -1,22 +1,21 @@
 from pathlib import Path
-from shutil import make_archive
-from typing import Optional
 
 import isce3
 import numpy as np
 import s1reader
-from burst2safe.burst2safe import burst2safe
 from osgeo import gdal
 
-from multirtc import dem, orbit
-from multirtc.base import SlcTemplate, from_isce_datetime, to_isce_datetime
+from multirtc import define_geogrid
+from multirtc.base import Slc, from_isce_datetime, to_isce_datetime
 
 
 gdal.UseExceptions()
 
 
-class S1BurstSlc(SlcTemplate):
-    def __init__(self, safe_path, orbit_path, burst_name):
+class S1BurstSlc(Slc):
+    """Class representing a Sentinel-1 burst SLC (Single Look Complex) product."""
+
+    def __init__(self, safe_path: Path, orbit_path: Path, burst_name: str):
         _, burst_id, swath, _, polarization, _ = burst_name.split('_')
         burst_id = int(burst_id)
         swath_num = int(swath[2])
@@ -29,6 +28,7 @@ class S1BurstSlc(SlcTemplate):
         self.filepath = vrt_path
         self.footprint = burst.border[0]
         self.center = burst.center
+        self.local_epsg = define_geogrid.get_point_epsg(self.center.y, self.center.x)
         self.lookside = 'right'
         self.wavelength = burst.wavelength
         self.polarization = burst.polarization
@@ -56,9 +56,19 @@ class S1BurstSlc(SlcTemplate):
         self.first_valid_sample = burst.first_valid_sample
         self.last_valid_sample = burst.last_valid_sample
         self.source = burst
+        self.supports_rtc = True
+        self.supports_bistatic_delay = True
+        self.supports_static_tropo = True
 
-    def apply_valid_data_masking(self):
-        # Extract burst boundaries and create sub_swaths object to mask invalid radar samples
+    def create_geogrid(self, spacing_meters: int) -> isce3.product.GeoGridParameters:
+        return define_geogrid.generate_geogrids(self, spacing_meters, self.local_epsg)
+
+    def apply_valid_data_masking(self) -> isce3.product.SubSwaths:
+        """Extract burst boundaries and create sub_swaths object to mask invalid radar samples.
+
+        Returns:
+           SubSwaths object with valid samples set according to the burst boundaries.
+        """
         n_subswaths = 1
         sub_swaths = isce3.product.SubSwaths(self.radar_grid.length, self.radar_grid.width, n_subswaths)
         last_range_sample = min([self.last_valid_sample, self.radar_grid.width])
@@ -73,8 +83,13 @@ class S1BurstSlc(SlcTemplate):
         sub_swaths.set_valid_samples_array(1, valid_samples_sub_swath)
         return sub_swaths
 
-    def create_complex_beta0(self, outpath: Path, flag_thermal_correction: bool = True):
-        """Apply conversion to beta0 and optionally applies a thermal correction."""
+    def create_complex_beta0(self, outpath: Path, flag_thermal_correction: bool = True) -> None:
+        """Apply conversion to beta0 and optionally apply a thermal noise correction.
+
+        Args:
+            outpath: Path to save the corrected beta0 image.
+            flag_thermal_correction: If True, apply thermal noise correction using the LUT from the source burst.
+        """
         # Load the SLC of the burst
         slc_gdal_ds = gdal.Open(str(self.filepath))
         arr_slc_from = slc_gdal_ds.ReadAsArray()
@@ -103,31 +118,3 @@ class S1BurstSlc(SlcTemplate):
         band_out.WriteArray(corrected_image)
         band_out.FlushCache()
         del band_out
-
-
-def prep_burst(burst_granule: str, work_dir: Optional[Path] = None) -> Path:
-    """Prepare data for burst-based processing.
-
-    Args:
-        granule: Sentinel-1 burst SLC granule to create RTC dataset for
-        use_resorb: Use the RESORB orbits instead of the POEORB orbits
-        work_dir: Working directory for processing
-    """
-    if work_dir is None:
-        work_dir = Path.cwd()
-
-    print('Downloading data...')
-
-    if len(list(work_dir.glob('S1*.zip'))) == 0:
-        granule_path = burst2safe(granules=[burst_granule], all_anns=True, work_dir=work_dir)
-        make_archive(base_name=str(granule_path.with_suffix('')), format='zip', base_dir=str(granule_path))
-        granule_path = granule_path.with_suffix('.zip')
-    else:
-        granule_path = work_dir / list(work_dir.glob('S1*.zip'))[0].name
-
-    orbit_path = orbit.get_orbit(granule_path.with_suffix('').name, save_dir=work_dir)
-
-    burst_slc = S1BurstSlc(granule_path, orbit_path, burst_granule)
-    dem_path = work_dir / 'dem.tif'
-    dem.download_opera_dem_for_footprint(dem_path, burst_slc.footprint)
-    return burst_slc, dem_path

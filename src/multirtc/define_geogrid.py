@@ -1,15 +1,20 @@
 import isce3
 import numpy as np
-import pyproj
 from shapely.geometry import Polygon
 
 
-ECEF = pyproj.CRS(4978)
-LLA = pyproj.CRS(4979)
-ECEF2LLA = pyproj.Transformer.from_crs(ECEF, LLA, always_xy=True)
+def get_point_epsg(lat: float, lon: float) -> int:
+    """Determine the best EPSG code for a given latitude and longitude.
+    Returns the local UTM zone for latitudes between +/-75 degrees and
+    polar/antartic stereographic for latitudes outside that range.
 
+    Args:
+        lat: Latitude in degrees.
+        lon: Longitude in degrees.
 
-def get_point_epsg(lat, lon):
+    Returns:
+        EPSG code for the specified latitude and longitude.
+    """
     if (lon >= 180.0) or (lon <= -180.0):
         lon = (lon + 180.0) % 360.0 - 180.0
     if lat >= 75.0:
@@ -22,57 +27,53 @@ def get_point_epsg(lat, lon):
         epsg = 32701 + int(np.round((lon + 177) / 6.0))
     else:
         raise ValueError(f'Could not determine EPSG for {lon}, {lat}')
-    assert 1024 <= epsg <= 32767, 'Computed EPSG is out of range'
+    assert (32600 <= epsg <= 32761) or epsg in [3031, 3413], 'Computed EPSG is out of range'
     return epsg
 
 
-def snap_coord(val, snap, round_func):
+def snap_coord(val: float, snap: float, round_func: callable) -> float:
     """
-    Returns the snapped values of the input value
+    Returns the snapped version of the input value
 
-    Parameters
-    -----------
-    val : float
-        Input value to snap
-    snap : float
-        Snapping step
-    round_func : function pointer
-        A function used to round `val` i.e. round, ceil, floor
+    Args:
+        val : value to snap
+        snap : snapping step
+        round_func : function pointer to round, ceil, or floor
 
-    Return:
-    --------
-    snapped_value : float
-        snapped value of `var` by `snap`
-
+    Returns:
+        snapped value of `val` by `snap`
     """
     snapped_value = round_func(float(val) / snap) * snap
     return snapped_value
 
 
-def grid_size(stop, start, sz):
+def grid_size(stop: float, start: float, size: float):
     """
-    get grid dim based on start, end, and grid size inputs
+    Get number of grid points based on start, end, and grid size inputs
+
+    Args:
+        stop: End value of grid
+        start: Start value of grid
+        size: Grid size in same units as start and stop
+
+    Returns:
+        Number of grid points between start and stop
     """
-    assert None not in [stop, start, sz], 'Invalid input values'
-    return int(np.round(np.abs((stop - start) / sz)))
+    return int(np.round(np.abs((stop - start) / size)))
 
 
-def snap_geogrid(geogrid, x_snap, y_snap):
+def snap_geogrid(
+    geogrid: isce3.product.GeoGridParameters, x_snap: float, y_snap: float
+) -> isce3.product.GeoGridParameters:
     """
     Snap geogrid based on user-defined snapping values
 
-    Parameters
-    ----------
-    geogrid: isce3.product.GeoGridParameters
-        ISCE3 object definining the geogrid
-    x_snap: float
-        Snap value along X-direction
-    y_snap: float
-        Snap value along Y-direction
+    Args:
+        geogrid: ISCE3 object definining the geogrid
+        x_snap: Snap value along X-direction
+        y_snap: Snap value along Y-direction
 
-    Returns
-    -------
-    geogrid: isce3.product.GeoGridParameters
+    Returns:
         ISCE3 object containing the snapped geogrid
     """
     xmax = geogrid.start_x + geogrid.width * geogrid.spacing_x
@@ -88,7 +89,16 @@ def snap_geogrid(geogrid, x_snap, y_snap):
     return geogrid
 
 
-def get_geogrid_poly(geogrid):
+def get_geogrid_poly(geogrid: isce3.product.GeoGridParameters) -> Polygon:
+    """
+    Create a polygon from a geogrid object
+
+    Args:
+        geogrid: ISCE3 object defining the geogrid
+
+    Returns:
+        Shapely Polygon representing the geogrid area
+    """
     new_maxx = geogrid.start_x + (geogrid.width * geogrid.spacing_x)
     new_miny = geogrid.start_y + (geogrid.length * geogrid.spacing_y)
     points = [
@@ -101,21 +111,21 @@ def get_geogrid_poly(geogrid):
     return poly
 
 
-def generate_geogrids(slc_obj, resolution: int, epsg: int = None, rda: bool = True):
-    """
-    Compute the slc geogrid
-    """
-    x_spacing = resolution
-    y_spacing = -1 * np.abs(resolution)
-    if epsg is None:
-        epsg = get_point_epsg(slc_obj.center.y, slc_obj.center.x)
+def generate_geogrids(slc, spacing_meters: int, epsg: int) -> isce3.product.GeoGridParameters:
+    """Compute a geogrid based on the radar grid of the SLC and the specified spacing.
 
-    # if rda:
-    #     radar_grid = slc_obj.as_isce3_radargrid()
-    # else:
-    #     geogrid = slc_obj.get_geogrid(x_spacing, y_spacing)
+    Args:
+        slc: Slc-derived object containing radar grid, orbit, and doppler centroid grid.
+        spacing_meters: Spacing in meters for the geogrid.
+        epsg: EPSG code for the coordinate reference system.
+
+    Returns:
+        A geogrid object with the specified spacing.
+    """
+    x_spacing = spacing_meters
+    y_spacing = -1 * np.abs(spacing_meters)
     geogrid = isce3.product.bbox_to_geogrid(
-        slc_obj.radar_grid, slc_obj.orbit, slc_obj.doppler_centroid_grid, x_spacing, y_spacing, epsg
+        slc.radar_grid, slc.orbit, slc.doppler_centroid_grid, x_spacing, y_spacing, epsg
     )
     geogrid_snapped = snap_geogrid(geogrid, geogrid.spacing_x, geogrid.spacing_y)
     return geogrid_snapped

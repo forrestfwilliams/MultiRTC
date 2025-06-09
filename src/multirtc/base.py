@@ -1,4 +1,4 @@
-from abc import ABC
+from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
 
@@ -7,7 +7,7 @@ import numpy as np
 from shapely.geometry import Point, Polygon
 
 
-def to_isce_datetime(dt):
+def to_isce_datetime(dt: datetime | np.datetime64) -> isce3.core.DateTime:
     if isinstance(dt, datetime):
         return isce3.core.DateTime(dt)
     elif isinstance(dt, np.datetime64):
@@ -16,11 +16,23 @@ def to_isce_datetime(dt):
         raise ValueError(f'Unsupported datetime type: {type(dt)}. Expected datetime or np.datetime64.')
 
 
-def from_isce_datetime(dt):
+def from_isce_datetime(dt: isce3.core.DateTime) -> datetime:
     return datetime.fromisoformat(dt.isoformat())
 
 
-class SlcTemplate(ABC):
+def print_wkt(slc):
+    radar_grid = slc.radar_grid
+    dem = isce3.geometry.DEMInterpolator(slc.scp_hae)
+    doppler = slc.doppler_centroid_grid
+    wkt = isce3.geometry.get_geo_perimeter_wkt(
+        grid=radar_grid, orbit=slc.orbit, doppler=doppler, dem=dem, points_per_edge=3
+    )
+    print(wkt)
+
+
+class Slc(ABC):
+    """Template class for SLC objects that defines a common interface and enforces required attributes."""
+
     required_attributes = {
         'id': str,
         'filepath': Path,
@@ -34,6 +46,9 @@ class SlcTemplate(ABC):
         'reference_time': datetime,
         'sensing_start': float,
         'prf': float,
+        'supports_rtc': bool,
+        'supports_bistatic_delay': bool,
+        'supports_static_tropo': bool,
         'orbit': object,  # Replace with actual orbit type
         'radar_grid': object,  # Replace with actual radar grid type
         'doppler_centroid_grid': object,  # Replace with actual doppler centroid grid type
@@ -56,3 +71,16 @@ class SlcTemplate(ABC):
                     )
 
         cls.__init__ = wrapped_init
+
+    @abstractmethod
+    def create_geogrid(self, spacing_meters: int) -> isce3.product.GeoGridParameters:
+        """
+        Create a geogrid for the SLC object with the specified resolution.
+
+        Args:
+            spacing_meters: Pixel spacing in meters for the geogrid.
+
+        Returns:
+            The geogrid parameters for the SLC object.
+        """
+        pass
