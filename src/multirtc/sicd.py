@@ -18,12 +18,6 @@ def check_poly_order(poly):
     assert len(poly.Coefs) == poly.order1 + 1, 'Polynomial order does not match number of coefficients'
 
 
-def calculate_range(scp_ecef, row_uvect, row_shift, arp_ecef):
-    starting_row_pos = scp_ecef + (row_uvect * row_shift)
-    starting_range = np.linalg.norm(arp_ecef - starting_row_pos)
-    return starting_range
-
-
 class SicdSlc:
     """Base class for SICD SLCs."""
 
@@ -176,7 +170,7 @@ class SicdRzdSlc(Slc, SicdSlc):
         self.doppler_centroid_grid = isce3.core.LUT2d()
         self.supports_rtc = True
 
-    def get_starting_range(self, col):
+    def get_starting_range(self, col: int) -> float:
         assert 0 <= col < self.shape[1], 'Row index out of bounds'
         ycol = (col - self.shift[1]) * self.spacing[1]
         xrow = -self.shift[0] * self.spacing[0]  # fixing to first row
