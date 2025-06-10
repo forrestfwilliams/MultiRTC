@@ -1,6 +1,5 @@
 from datetime import timedelta
 from pathlib import Path
-from typing import Optional
 
 import isce3
 import numpy as np
@@ -55,7 +54,7 @@ class SicdSlc:
         self.supports_static_tropo = False
 
     def get_xrow_ycol(
-        self, rowrange: Optional[tuple] = None, colrange: Optional[tuple] = None
+        self, rowrange: tuple | None = None, colrange: tuple | None = None
     ) -> tuple[np.ndarray, np.ndarray]:
         """Calculate xrow and ycol index arrrays.
 
@@ -82,7 +81,7 @@ class SicdSlc:
         return xrow, ycol
 
     def load_scaled_data(
-        self, scale: str, power: bool = False, rowrange: Optional[tuple] = None, colrange: Optional[tuple] = None
+        self, scale: str, power: bool = False, rowrange: tuple | None = None, colrange: tuple | None = None
     ) -> np.ndarray:
         """Load scaled data from the SICD file.
 
