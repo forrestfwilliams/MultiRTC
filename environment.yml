@@ -4,7 +4,7 @@ channels:
   - nodefaults
 dependencies:
   # For running
-  - python
+  - python>=3.10
   - pip
   - gdal>=3.0
   - numpy>=1.20
