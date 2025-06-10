@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "multirtc"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [
     {name="Forrest Williams", email="ffwilliams2@alaska.edu"},
 ]
@@ -16,7 +16,7 @@ classifiers=[
     "Natural Language :: English",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
 ]
 dependencies = [
     "gdal",
