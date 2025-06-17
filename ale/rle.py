@@ -18,7 +18,7 @@ class Tile:
     ref_row: int
     ref_col: int
     shape: tuple
-    transform: tuple
+    bounds: tuple
 
 
 def get_flattened_range(image_path, pct_min=1, pct_max=99):
@@ -42,7 +42,7 @@ def get_geo_info(image_path):
     return trans, bounds
 
 
-def get_tiling_schema(reference_path, secondary_path, tile_size=256):
+def get_tiling_schema(reference_path, secondary_path, tile_size=512):
     ref_trans, ref_bounds = get_geo_info(reference_path)
     sec_trans, sec_bounds = get_geo_info(secondary_path)
     inter_bounds = (
@@ -61,13 +61,12 @@ def get_tiling_schema(reference_path, secondary_path, tile_size=256):
     for irow, icol in np.ndindex(nrow_tiles, ncol_tiles):
         minrow = row_offset + (irow * tile_size)
         mincol = col_offset + (icol * tile_size)
-        maxy = ref_trans[3] + (mincol * ref_trans[5])
+        maxy = ref_trans[3] + (minrow * ref_trans[5])
         miny = maxy + (tile_size * ref_trans[5])
-        minx = ref_trans[0] + (minrow * ref_trans[1])
+        minx = ref_trans[0] + (mincol * ref_trans[1])
         maxx = minx + (tile_size * ref_trans[1])
-        # transform = (minx, ref_trans[1], 0.0, maxy, 0.0, ref_trans[5])
-        transform = (minx, miny, maxx, maxy)
-        tile = Tile(f'tile_{irow}_{icol}', minrow, mincol, (tile_size, tile_size), transform)
+        bounds = (minx, miny, maxx, maxy)
+        tile = Tile(f'tile_{irow}_{icol}', minrow, mincol, (tile_size, tile_size), bounds)
         tiles.append(tile)
     return tiles
 
@@ -75,16 +74,12 @@ def get_tiling_schema(reference_path, secondary_path, tile_size=256):
 def load_tiles(reference_path: Path, secondary_path: Path, tile: Tile, val_bounnds=None):
     ref_ds = gdal.Open(str(reference_path), gdal.GA_ReadOnly)
     ref_band = ref_ds.GetRasterBand(1)
-    try:
-        ref_data = ref_band.ReadAsArray(tile.ref_col, tile.ref_row, *tile.shape)
-    except RuntimeError:
-        breakpoint()
-    ref_ds = None
+    ref_data = ref_band.ReadAsArray(tile.ref_col, tile.ref_row, *tile.shape)
     with NamedTemporaryFile(suffix='.tif') as sec_warped:
         gdal.Warp(
             sec_warped.name,
             str(secondary_path),
-            outputBounds=tile.transform,
+            outputBounds=tile.bounds,
             width=tile.shape[1],
             height=tile.shape[0],
             resampleAlg=gdal.GRA_Bilinear,
@@ -108,31 +103,26 @@ def rle(reference_path: Path, secondary_path: Path, project: str, basedir: Path)
     project_dir = basedir / project
     project_dir.mkdir(parents=True, exist_ok=True)
     min_val, max_val = get_flattened_range(reference_path)
-    print(f'Flattened range for {reference_path}: ({min_val:.5f}, {max_val:.5f})')
     pixel_size = get_geo_info(reference_path)[0][1]
     tiles = get_tiling_schema(reference_path, secondary_path)
-    zeros = np.zeros(len(tiles), dtype=float)
-    df = pd.DataFrame(
-        {'id': [tile.id for tile in tiles], 'shift_x': zeros, 'shift_y': zeros, 'error': zeros, 'phase': zeros}
-    )
     rows = []
     for tile in tiles:
         ref_data, sec_data = load_tiles(reference_path, secondary_path, tile, val_bounnds=(min_val, max_val))
         n_pixels = np.prod(tile.shape)
         if np.isnan(ref_data).sum() > 0.1 * n_pixels or np.isnan(sec_data).sum() > 0.1 * n_pixels:
-            print(f'Skipping tile {tile.id} due to excessive NaNs')
             continue
         ref_data[np.isnan(ref_data)] = 0.0
         sec_data[np.isnan(sec_data)] = 0.0
         shift, phase, error = phase_cross_correlation(ref_data, sec_data, upsample_factor=10)
-        rows = {
+        row = {
             'id': tile.id,
             'shift_x': shift[1] * pixel_size,
             'shift_y': shift[0] * pixel_size,
             'error': error * pixel_size,
             'phase': phase,
         }
-    df = pd.DataFrame(rows, index=[0])
+        rows.append(pd.Series(row))
+    df = pd.DataFrame(rows)
     df.to_csv(project_dir / 'rle_results.csv', index=False)
 
 
