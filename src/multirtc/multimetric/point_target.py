@@ -92,13 +92,15 @@ def analyze_point_targets(platform, filepath, project, basedir, width=64):
     cr_df.to_csv(outdir / f'{project}_point_target.csv', index=False)
 
 
-def main():
-    parser = ArgumentParser(description='Analyze point target characteristics over Rosamond')
+def create_parser(parser):
     parser.add_argument('platform', choices=SUPPORTED, help='Platform to create RTC for')
     parser.add_argument('filepath', type=str, help='Path to the file to be processed')
     parser.add_argument('project', type=str, help='Directory to save the results')
     parser.add_argument('--basedir', type=str, default='.', help='Base directory for the project')
-    args = parser.parse_args()
+    return parser
+
+
+def run(args):
     if args.platform not in SUPPORTED:
         raise ValueError(f'Platform {args.platform} is not supported. Supported platforms: {SUPPORTED}')
 
@@ -106,6 +108,13 @@ def main():
     assert args.filepath.exists()
     args.basedir = Path(args.basedir).expanduser()
     analyze_point_targets(args.platform, args.filepath, args.project, basedir=args.basedir)
+
+
+def main():
+    parser = ArgumentParser(description='Point target (resolution, PSLR, and ISLR) analysis')
+    parser = create_parser(parser)
+    args = parser.parse_args()
+    run(args)
 
 
 if __name__ == '__main__':

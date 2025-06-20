@@ -45,6 +45,7 @@ Documentation = "https://github.com/forrestfwilliams/multirtc"
 
 [project.scripts]
 multirtc = "multirtc.multirtc:main"
+multimetric = "multirtc.multimetric.__main__:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

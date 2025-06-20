@@ -126,25 +126,29 @@ def rle(reference_path: Path, secondary_path: Path, project: str, basedir: Path)
     df.to_csv(project_dir / 'rle_results.csv', index=False)
 
 
-def main():
-    """Example:
-    python rle.py reference.tif secondary.tif
-    """
-    parser = ArgumentParser(description='Relative location error between two RTCs')
+def create_parser(parser):
     parser.add_argument('reference', type=str, help='Path to the reference image')
     parser.add_argument('secondary', type=str, help='Path to the secondary image')
     parser.add_argument('project', type=str, help='Directory to save the results')
     parser.add_argument('--basedir', type=str, default='.', help='Base directory for the project')
-    args = parser.parse_args()
+    return parser
 
+
+def run(args):
     args.reference = Path(args.reference)
     assert args.reference.exists(), f'RTC file {args.reference} does not exist'
     args.secondary = Path(args.secondary)
     assert args.secondary.exists(), f'RTC file {args.secondary} does not exist'
     args.basedir = Path(args.basedir)
     assert args.basedir.exists(), f'Base directory {args.basedir} does not exist'
-
     rle(args.reference, args.secondary, project=args.project, basedir=args.basedir)
+
+
+def main():
+    parser = ArgumentParser(description='Relative Location Error (RLE) analysis')
+    parser = create_parser(parser)
+    args = parser.parse_args()
+    run(args)
 
 
 if __name__ == '__main__':

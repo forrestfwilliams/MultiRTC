@@ -220,18 +220,16 @@ def ale(filepath, date, azmangle, project, basedir):
     plot_ale(cr_df, azmangle, project, outdir)
 
 
-def main():
-    """Example:
-    python ale.py rtc.tif 2024-12-03 17 out
-    """
-    parser = ArgumentParser(description='Absolute Location Error Estimation.')
+def create_parser(parser):
     parser.add_argument('filepath', type=str, help='Path to the file to be processed')
     parser.add_argument('date', type=str, help='Date of the image collection (YYYY-MM-DD)')
     parser.add_argument('azmangle', type=int, help='Azimuth angle of the image (clockwise from North in degrees)')
     parser.add_argument('project', type=str, help='Directory to save the results')
     parser.add_argument('--basedir', type=str, default='.', help='Base directory for the project')
+    return parser
 
-    args = parser.parse_args()
+
+def run(args):
     args.filepath = Path(args.filepath)
     args.date = datetime.strptime(args.date, '%Y-%m-%d')
     assert 0 <= args.azmangle <= 360, f'Azimuth angle {args.azmangle} is out of range [0, 360].'
@@ -239,6 +237,13 @@ def main():
     assert args.filepath.exists(), f'File {args.filepath} does not exist.'
 
     ale(args.filepath, args.date, args.azmangle, args.project, basedir=args.basedir)
+
+
+def main():
+    parser = ArgumentParser(description='Absolute Location Error (ALE) analysis')
+    parser = create_parser(parser)
+    args = parser.parse_args()
+    run(args)
 
 
 if __name__ == '__main__':
