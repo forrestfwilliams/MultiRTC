@@ -36,12 +36,8 @@ dependencies = [
 dynamic = ["version", "readme"]
 
 [project.optional-dependencies]
-develop = [
-    "pytest",
-    "pytest-cov",
-    "pytest-console-scripts",
-    "ruff",
-]
+multimetric = ["pandas", "matplotlib", "lmfit", "scikit-image",]
+develop = ["pytest", "pytest-cov", "pytest-console-scripts", "ruff"]
 
 [project.urls]
 Homepage = "https://github.com/forrestfwilliams/multirtc"

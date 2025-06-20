@@ -10,7 +10,7 @@ from lmfit import Model
 from osgeo import gdal, osr
 from shapely import box
 
-from multirtc.metrics import corner_reflector
+from multirtc.multimetric import corner_reflector
 
 
 gdal.UseExceptions()

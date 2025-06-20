@@ -6,7 +6,7 @@ import numpy as np
 from isce3.cal.point_target_info import analyze_point_target_chip, dB
 from shapely.geometry import box
 
-from multirtc.metrics import corner_reflector
+from multirtc.multimetric import corner_reflector
 from multirtc.multirtc import get_slc
 from multirtc.sicd import reformat_for_isce
 
