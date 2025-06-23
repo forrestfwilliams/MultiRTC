@@ -95,8 +95,8 @@ def analyze_point_targets(platform, filepath, project, basedir, width=64):
 def create_parser(parser):
     parser.add_argument('platform', choices=SUPPORTED, help='Platform to create RTC for')
     parser.add_argument('filepath', type=str, help='Path to the file to be processed')
-    parser.add_argument('project', type=str, help='Directory to save the results')
-    parser.add_argument('--basedir', type=str, default='.', help='Base directory for the project')
+    parser.add_argument('project', type=str, help='File prefix and output directory')
+    parser.add_argument('--basedir', type=str, default='.', help='Base directory for the project dir')
     return parser
 
 

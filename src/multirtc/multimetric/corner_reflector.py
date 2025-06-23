@@ -6,6 +6,26 @@ from pyproj import Transformer, transform
 from shapely.geometry import Point, box
 
 
+def get_bounds(geotransform, shape):
+    x_start = geotransform[0] + 0.5 * geotransform[1]
+    y_start = geotransform[3] + 0.5 * geotransform[5]
+    x_end = x_start + geotransform[1] * shape[1]
+    y_end = y_start + geotransform[5] * shape[0]
+    bounds = (x_start, y_start, x_end, y_end)
+    bounds = box(*bounds)
+    return bounds
+
+
+def get_epsg4326_bounds(geotransform, shape, epsg):
+    bounds = get_bounds(geotransform, shape)
+    if epsg == 4326:
+        return bounds
+    transformer = Transformer.from_crs(f'EPSG:{epsg}', 'EPSG:4326', always_xy=True)
+    min_lon, min_lat = transformer.transform(bounds.bounds[0], bounds.bounds[1])
+    max_lon, max_lat = transformer.transform(bounds.bounds[2], bounds.bounds[3])
+    return box(min_lon, min_lat, max_lon, max_lat)
+
+
 def filter_orientation(cr_df, azm_angle):
     looking_east = azm_angle < 180
     if looking_east:
@@ -15,11 +35,20 @@ def filter_orientation(cr_df, azm_angle):
     return cr_df
 
 
-def get_cr_df(bounds, epsg, date, azm_angle, outdir):
+def filter_valid_data(cr_df, data):
+    remove_indices = []
+    for idx, row in cr_df.iterrows():
+        xloc = int(row['xloc'])
+        yloc = int(row['yloc'])
+        local_data = data[yloc - 2 : yloc + 2, xloc - 3 : xloc + 3]
+        if not np.all(np.isnan(local_data)):
+            remove_indices.append(idx)
+    cr_df = cr_df.drop(remove_indices).reset_index(drop=True)
+    return cr_df
+
+
+def get_cr_df(bounds, date, azmangle, outdir):
     rosamond_bounds = box(*[-124.409591, 32.534156, -114.131211, 42.009518])
-    if epsg != 4326:
-        transformer = Transformer.from_crs('EPSG:4326', f'EPSG:{epsg}', always_xy=True)
-        rosamond_bounds = transform(transformer.transform, rosamond_bounds)
     assert bounds.intersects(rosamond_bounds), f'Images does not intersect with Rosamond bounds {rosamond_bounds}.'
     date_str = date.strftime('%Y-%m-%d+%H\u0021%M')
     crdata = outdir / f'{date_str.split("+")[0]}_crdata.csv'
@@ -45,11 +74,18 @@ def get_cr_df(bounds, epsg, date, azm_angle, outdir):
         if not bounds.contains(point):
             not_in_bounds.append(idx)
     cr_df = cr_df.drop(not_in_bounds).reset_index(drop=True)
-    cr_df = filter_orientation(cr_df, azm_angle)
+    cr_df = cr_df.loc[cr_df['slen'] > 0.8].reset_index(drop=True)  # excluding SWOT CRs (0.7 m as a side length)
+    cr_df['ID'] = cr_df['ID'].astype(int)
+    cr_df = filter_orientation(cr_df, azmangle)
     return cr_df
 
 
-def add_geo_image_location(cr_df, epsg, x_start, y_start, x_spacing, y_spacing, bounds):
+def add_geo_image_location(cr_df, geotransform, shape, epsg):
+    bounds = get_bounds(geotransform, shape)
+    x_start = bounds.bounds[0]
+    y_start = bounds.bounds[1]
+    x_spacing = geotransform[1]
+    y_spacing = geotransform[5]
     blank = [np.nan] * cr_df.shape[0]
     blank_bool = [False] * cr_df.shape[0]
     cr_df = cr_df.assign(

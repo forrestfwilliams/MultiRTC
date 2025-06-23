@@ -133,17 +133,17 @@ def calculate_ale_for_cr(point, data, project, outdir, search_window=100, oversa
     ax[0].plot(xpeak_centered, ypeak_centered, 'r+', label='Return Peak')
     ax[0].plot(xreal_centered, yreal_centered, 'b+', label='CR Location')
     ax[0].legend()
-    ax[0].set_title(f'Corner Reflector ID: {int(point["ID"])}')
+    ax[0].set_title(f'Corner Reflector (ID {int(point["ID"])})')
     ax[1].imshow(data_ovs, cmap='gray', interpolation=None, origin='upper')
     ax[1].plot(xpeak_ovs, ypeak_ovs, 'r+')
     ax[1].plot(xreal_ovs, yreal_ovs, 'b+')
-    ax[1].set_title(f'Oversampled Corner Reflector ID: {point["ID"]}')
+    ax[1].set_title(f'Oversampled Corner Reflector (ID {int(point["ID"])})')
     ax[2].imshow(fit, cmap='gray', interpolation=None, origin='upper')
     ax[2].plot(result.best_values['x0'], result.best_values['y0'], 'r+')
-    ax[2].set_title(f'Gaussian Fit Corner Reflector ID: {int(point["ID"])}')
+    ax[2].set_title(f'Gaussian Fit Corner Reflector (ID {int(point["ID"])})')
     [axi.axis('off') for axi in ax]
     fig.tight_layout()
-    fig.savefig(outdir / f'{project}_CR_{int(point["ID"])}.png', dpi=300, bbox_inches='tight')
+    fig.savefig(outdir / f'{project}_CR_{point["ID"]}.png', dpi=300, bbox_inches='tight')
 
     return point
 
@@ -188,25 +188,23 @@ def plot_ale(cr_df, azmangle, project, outdir):
 def ale(filepath, date, azmangle, project, basedir):
     outdir = basedir / project
     outdir.mkdir(parents=True, exist_ok=True)
+
     ds = gdal.Open(str(filepath))
     data = ds.GetRasterBand(1).ReadAsArray()
     geotransform = ds.GetGeoTransform()
-    x_start = geotransform[0] + 0.5 * geotransform[1]
-    y_start = geotransform[3] + 0.5 * geotransform[5]
-    x_end = x_start + geotransform[1] * ds.RasterXSize
-    y_end = y_start + geotransform[5] * ds.RasterYSize
-    bounds = (x_start, y_start, x_end, y_end)
-    bounds = box(*bounds)
     x_spacing = geotransform[1]
     y_spacing = geotransform[5]
+    shape = (ds.RasterYSize, ds.RasterXSize)
 
     srs = osr.SpatialReference()
     srs.ImportFromWkt(ds.GetProjectionRef())
     epsg = int(srs.GetAuthorityCode(None))
-    cr_df = corner_reflector.get_cr_df(bounds, epsg, date, outdir)
-    cr_df = corner_reflector.add_geo_image_location(cr_df, epsg, x_start, y_start, x_spacing, y_spacing, bounds)
+
+    epsg4326_bounds = corner_reflector.get_epsg4326_bounds(geotransform, shape, epsg)
+
+    cr_df = corner_reflector.get_cr_df(epsg4326_bounds, date, azmangle, outdir)
+    cr_df = corner_reflector.add_geo_image_location(cr_df, geotransform, shape, epsg)
     cr_df = filter_valid_data(cr_df, data)
-    cr_df = corner_reflector.filter_orientation(cr_df, azmangle)
     cr_df = cr_df.assign(yloc_cr=np.nan, xloc_cr=np.nan)
     plot_crs_on_image(cr_df, data, project, outdir)
     for idx, cr in cr_df.iterrows():
@@ -224,8 +222,8 @@ def create_parser(parser):
     parser.add_argument('filepath', type=str, help='Path to the file to be processed')
     parser.add_argument('date', type=str, help='Date of the image collection (YYYY-MM-DD)')
     parser.add_argument('azmangle', type=int, help='Azimuth angle of the image (clockwise from North in degrees)')
-    parser.add_argument('project', type=str, help='Directory to save the results')
-    parser.add_argument('--basedir', type=str, default='.', help='Base directory for the project')
+    parser.add_argument('project', type=str, help='File prefix and output directory')
+    parser.add_argument('--basedir', type=str, default='.', help='Base directory for the project dir')
     return parser
 
 
