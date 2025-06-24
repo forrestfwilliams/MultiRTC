@@ -3,10 +3,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from osgeo import gdal
 from skimage.registration import phase_cross_correlation
+from tqdm import tqdm
 
 
 gdal.UseExceptions()
@@ -42,18 +44,18 @@ def get_geo_info(image_path):
     return trans, bounds
 
 
-def get_tiling_schema(reference_path, secondary_path, tile_size=512):
+def get_tiling_schema(reference_path, secondary_path, tile_size=1024):
     ref_trans, ref_bounds = get_geo_info(reference_path)
     sec_trans, sec_bounds = get_geo_info(secondary_path)
     inter_bounds = (
         max(ref_bounds[0], sec_bounds[0]),
-        min(ref_bounds[1], sec_bounds[1]),
-        max(ref_bounds[2], sec_bounds[2]),
+        max(ref_bounds[1], sec_bounds[1]),
+        min(ref_bounds[2], sec_bounds[2]),
         min(ref_bounds[3], sec_bounds[3]),
     )
-    row_offset = int((inter_bounds[3] - ref_bounds[3]) / np.abs(ref_trans[5]))
-    col_offset = int((inter_bounds[0] - ref_trans[0]) / np.abs(ref_trans[1]))
-    nrows = (inter_bounds[3] - inter_bounds[1]) / np.abs(ref_trans[5])
+    row_offset = max(int((inter_bounds[3] - ref_bounds[3]) / np.abs(ref_trans[5])), 512)
+    col_offset = max(int((inter_bounds[0] - ref_bounds[0]) / np.abs(ref_trans[1])), 0)
+    nrows = ((inter_bounds[3] - inter_bounds[1]) / np.abs(ref_trans[5])) - 512
     nrow_tiles = int(np.floor(nrows / tile_size))
     ncols = (inter_bounds[2] - inter_bounds[0]) / np.abs(ref_trans[1])
     ncol_tiles = int(np.floor(ncols / tile_size))
@@ -99,6 +101,37 @@ def load_tiles(reference_path: Path, secondary_path: Path, tile: Tile, val_bounn
     return ref_data, sec_data
 
 
+def plot_offsets(df: pd.DataFrame, output_path: Path):
+    row_col = [id.split('_')[1:] for id in df['id']]
+    rows = [int(row) for row, _ in row_col]
+    minrow, maxrow = min(rows), max(rows)
+    cols = [int(col) for _, col in row_col]
+    mincol, maxcol = min(cols), max(cols)
+    blank = np.zeros((maxrow - minrow + 1, maxcol - mincol + 1))
+    blank[:, :] = np.nan
+    y_offset = blank.copy()
+    x_offset = blank.copy()
+    for idx, row in df.iterrows():
+        if row['id'] == 'mean' or row['id'] == 'std':
+            continue
+        i, j = map(int, row['id'].split('_')[1:])
+        y_offset[i - minrow, j - mincol] = row['shift_y']
+        x_offset[i - minrow, j - mincol] = row['shift_x']
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
+    im1 = ax1.imshow(y_offset, cmap='coolwarm')
+    ax1.set_title('Y Offset (m)')
+    ax1.set_xlabel('Column Index')
+    ax1.set_ylabel('Row Index')
+    im2 = ax2.imshow(x_offset, cmap='coolwarm')
+    ax2.set_title('X Offset (m)')
+    ax2.set_xlabel('Column Index')
+    ax2.set_ylabel('Row Index')
+    # plt.colorbar(cax=im1, ax=ax1, label='Y Offset (m)')
+    # plt.colorbar(cax=im2, ax=ax2, label='X Offset (m)')
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+
+
 def rle(reference_path: Path, secondary_path: Path, project: str, basedir: Path):
     project_dir = basedir / project
     project_dir.mkdir(parents=True, exist_ok=True)
@@ -106,7 +139,7 @@ def rle(reference_path: Path, secondary_path: Path, project: str, basedir: Path)
     pixel_size = get_geo_info(reference_path)[0][1]
     tiles = get_tiling_schema(reference_path, secondary_path)
     rows = []
-    for tile in tiles:
+    for tile in tqdm(tiles, desc='Processing tiles'):
         ref_data, sec_data = load_tiles(reference_path, secondary_path, tile, val_bounnds=(min_val, max_val))
         n_pixels = np.prod(tile.shape)
         if np.isnan(ref_data).sum() > 0.1 * n_pixels or np.isnan(sec_data).sum() > 0.1 * n_pixels:
@@ -122,8 +155,15 @@ def rle(reference_path: Path, secondary_path: Path, project: str, basedir: Path)
             'phase': phase,
         }
         rows.append(pd.Series(row))
+    base_name = f'{reference_path.stem}_x_{secondary_path.stem}'
     df = pd.DataFrame(rows)
-    df.to_csv(project_dir / 'rle_results.csv', index=False)
+    plot_offsets(df, project_dir / f'{base_name}_offsets.png')
+    mean_row = df.iloc[:, 1:].mean()
+    mean_row['id'] = 'mean'
+    std_row = df.iloc[:, 1:].std()
+    std_row['id'] = 'std'
+    df = pd.concat([df, pd.DataFrame([mean_row, std_row])], ignore_index=True)
+    df.to_csv(project_dir / f'{base_name}.csv', index=False)
 
 
 def create_parser(parser):
@@ -136,9 +176,9 @@ def create_parser(parser):
 
 def run(args):
     args.reference = Path(args.reference)
-    assert args.reference.exists(), f'RTC file {args.reference} does not exist'
+    assert args.reference.exists(), f'Image file {args.reference} does not exist'
     args.secondary = Path(args.secondary)
-    assert args.secondary.exists(), f'RTC file {args.secondary} does not exist'
+    assert args.secondary.exists(), f'Image file {args.secondary} does not exist'
     args.basedir = Path(args.basedir)
     assert args.basedir.exists(), f'Base directory {args.basedir} does not exist'
     rle(args.reference, args.secondary, project=args.project, basedir=args.basedir)
