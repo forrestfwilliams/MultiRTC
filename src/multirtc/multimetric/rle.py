@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from osgeo import gdal
+from scipy.stats import median_abs_deviation
 from skimage.registration import phase_cross_correlation
 from tqdm import tqdm
 
@@ -53,9 +54,9 @@ def get_tiling_schema(reference_path, secondary_path, tile_size=1024):
         min(ref_bounds[2], sec_bounds[2]),
         min(ref_bounds[3], sec_bounds[3]),
     )
-    row_offset = max(int((inter_bounds[3] - ref_bounds[3]) / np.abs(ref_trans[5])), 512)
+    row_offset = max(int((inter_bounds[3] - ref_bounds[3]) / np.abs(ref_trans[5])), tile_size)
     col_offset = max(int((inter_bounds[0] - ref_bounds[0]) / np.abs(ref_trans[1])), 0)
-    nrows = ((inter_bounds[3] - inter_bounds[1]) / np.abs(ref_trans[5])) - 512
+    nrows = ((inter_bounds[3] - inter_bounds[1]) / np.abs(ref_trans[5])) - tile_size
     nrow_tiles = int(np.floor(nrows / tile_size))
     ncols = (inter_bounds[2] - inter_bounds[0]) / np.abs(ref_trans[1])
     ncol_tiles = int(np.floor(ncols / tile_size))
@@ -112,27 +113,37 @@ def plot_offsets(df: pd.DataFrame, output_path: Path):
     y_offset = blank.copy()
     x_offset = blank.copy()
     for idx, row in df.iterrows():
-        if row['id'] == 'mean' or row['id'] == 'std':
+        if not row['valid']:
             continue
         i, j = map(int, row['id'].split('_')[1:])
         y_offset[i - minrow, j - mincol] = row['shift_y']
         x_offset[i - minrow, j - mincol] = row['shift_x']
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
-    im1 = ax1.imshow(y_offset, cmap='coolwarm')
+    vmin = np.nanmean(y_offset.flatten()) - 3 * np.nanstd(y_offset.flatten())
+    vmax = np.nanmean(y_offset.flatten()) + 3 * np.nanstd(y_offset.flatten())
+    im1 = ax1.imshow(y_offset, cmap='coolwarm', vmin=vmin, vmax=vmax)
+    ax1.xaxis.set_ticks_position('top')    # Moves the ticks
+    ax1.xaxis.set_label_position('top')
+    ax1.tick_params(axis='x', bottom=False)
     ax1.set_title('Y Offset (m)')
     ax1.set_xlabel('Column Index')
     ax1.set_ylabel('Row Index')
-    im2 = ax2.imshow(x_offset, cmap='coolwarm')
+    vmin = np.nanmean(x_offset.flatten()) - 3 * np.nanstd(x_offset.flatten())
+    vmax = np.nanmean(x_offset.flatten()) + 3 * np.nanstd(x_offset.flatten())
+    im2 = ax2.imshow(x_offset, cmap='coolwarm', vmin=vmin, vmax=vmax)
+    ax2.xaxis.set_ticks_position('top')    # Moves the ticks
+    ax2.xaxis.set_label_position('top')
+    ax2.tick_params(axis='x', bottom=False)
     ax2.set_title('X Offset (m)')
     ax2.set_xlabel('Column Index')
     ax2.set_ylabel('Row Index')
-    # plt.colorbar(cax=im1, ax=ax1, label='Y Offset (m)')
-    # plt.colorbar(cax=im2, ax=ax2, label='X Offset (m)')
+    plt.colorbar(im1, ax=ax1)
+    plt.colorbar(im2, ax=ax2)
     plt.tight_layout()
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
 
 
-def rle(reference_path: Path, secondary_path: Path, project: str, basedir: Path):
+def rle(reference_path: Path, secondary_path: Path, project: str, basedir: Path, max_nan_ratio=0.1, max_error=0.01):
     project_dir = basedir / project
     project_dir.mkdir(parents=True, exist_ok=True)
     min_val, max_val = get_flattened_range(reference_path)
@@ -141,26 +152,24 @@ def rle(reference_path: Path, secondary_path: Path, project: str, basedir: Path)
     rows = []
     for tile in tqdm(tiles, desc='Processing tiles'):
         ref_data, sec_data = load_tiles(reference_path, secondary_path, tile, val_bounnds=(min_val, max_val))
-        n_pixels = np.prod(tile.shape)
-        if np.isnan(ref_data).sum() > 0.1 * n_pixels or np.isnan(sec_data).sum() > 0.1 * n_pixels:
+        max_nans = max_nan_ratio * np.prod(tile.shape)
+        if np.isnan(ref_data).sum() > max_nans or np.isnan(sec_data).sum() > max_nans:
             continue
         ref_data[np.isnan(ref_data)] = 0.0
         sec_data[np.isnan(sec_data)] = 0.0
-        shift, phase, error = phase_cross_correlation(ref_data, sec_data, upsample_factor=10)
-        row = {
-            'id': tile.id,
-            'shift_x': shift[1] * pixel_size,
-            'shift_y': shift[0] * pixel_size,
-            'error': error * pixel_size,
-            'phase': phase,
-        }
-        rows.append(pd.Series(row))
+        shift, _, error = phase_cross_correlation(ref_data, sec_data, upsample_factor=16, overlap_ratio=0.8)
+        shift_y, shift_x = shift * pixel_size
+        rows.append(pd.Series({'id': tile.id, 'shift_x': shift_x, 'shift_y': shift_y, 'error': error}))
     base_name = f'{reference_path.stem}_x_{secondary_path.stem}'
     df = pd.DataFrame(rows)
+
+    df['shift_x_mdz'] = 0.6745 * np.abs(df['shift_x'] - np.median(df['shift_x'])) / median_abs_deviation(df['shift_x'])
+    df['shift_y_mdz'] = 0.6745 * np.abs(df['shift_y'] - np.median(df['shift_y'])) / median_abs_deviation(df['shift_y'])
+    df['valid'] = (df['shift_x_mdz'] <= 3.5) & (df['shift_y_mdz'] <= 3.5)
     plot_offsets(df, project_dir / f'{base_name}_offsets.png')
-    mean_row = df.iloc[:, 1:].mean()
+    mean_row = df.loc[df['valid'], df.columns.drop(['id', 'valid'])].mean()
     mean_row['id'] = 'mean'
-    std_row = df.iloc[:, 1:].std()
+    std_row = df.loc[df['valid'], df.columns.drop(['id', 'valid'])].std()
     std_row['id'] = 'std'
     df = pd.concat([df, pd.DataFrame([mean_row, std_row])], ignore_index=True)
     df.to_csv(project_dir / f'{base_name}.csv', index=False)
