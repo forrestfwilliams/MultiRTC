@@ -37,10 +37,10 @@ Currently, the Umbra processor only supports basic geocoding and not full RTC pr
 Currently, only the OPERA DEM is supported. This is a global Height Above Ellipsoid DEM sourced from the [COP-30 DEM](https://portal.opentopography.org/raster?opentopoID=OTSDEM.032021.4326.3). In the future, we hope to support a wider variety of automatically retrieved and user provided DEMs.
 
 ## Calibration & Validation Subcommands
-MultiRTC includes three calibration and validation (cal/val) subcommands for assessing the geometric and radiometric quality of SAR products. These tools are useful for analyzing co-registration, geolocation accuracy, and impulse response performance.
+MultiRTC includes three calibration and validation (cal/val) subcommands for assessing the geometric and radiometric quality of SAR products. These tools are useful for analyzing geolocation, co-registration, and impulse response performance.
 
 ### `ale` Absolute Location Error
-Quantifies the geolocation accuracy of a SAR image by comparing known corner reflectors at the Rosamond California site with their positions in the geocoded image.
+Quantifies the geolocation accuracy of a SAR image by comparing known corner reflectors at the Rosamond, California site with their positions in the geocoded image.
 
 Usage:
 ```bash
@@ -49,7 +49,7 @@ multirtc ale FILEPATH DATE AZMANGLE PROJECT --basedir BASEDIR
 See `multirtc ale --help` for descriptions of each argument.
 
 ### `rle` Relative Location Error
-Measures the internal alignment of overlapping geocoded SAR images by measuring the offsets between each 1024x1024 pixel chunk of the images.
+Measures the relative alignment of overlapping geocoded SAR images by measuring the offsets between each 1024x1024 pixel chunk of the images.
 
 Usage:
 ```bash
@@ -58,7 +58,7 @@ multirtc rle REFPATH SECPATH PROJECT --basedir BASEDIR
 See `multirtc rle --help` for descriptions of each argument.
 
 ### `pt` Point Target Analysis
-Evaluates the impulse response of corner reflector at the Rosamond California sites in the SAR image, including resolution, peak to side-lobe ratio (PSLR), and integrated side-lobe ratio (ISLR).
+Evaluates the impulse response of corner reflector at the Rosamond, California site in the SAR image, including resolution, peak to side-lobe ratio (PSLR), and integrated side-lobe ratio (ISLR).
 
 Usage:
 ```bash
