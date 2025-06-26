@@ -1,3 +1,5 @@
+"""Relative Location Error (RLE) analysis"""
+
 from argparse import ArgumentParser
 from dataclasses import dataclass
 from pathlib import Path
@@ -122,7 +124,7 @@ def plot_offsets(df: pd.DataFrame, output_path: Path):
     vmin = np.nanmean(y_offset.flatten()) - 3 * np.nanstd(y_offset.flatten())
     vmax = np.nanmean(y_offset.flatten()) + 3 * np.nanstd(y_offset.flatten())
     im1 = ax1.imshow(y_offset, cmap='coolwarm', vmin=vmin, vmax=vmax)
-    ax1.xaxis.set_ticks_position('top')    # Moves the ticks
+    ax1.xaxis.set_ticks_position('top')  # Moves the ticks
     ax1.xaxis.set_label_position('top')
     ax1.tick_params(axis='x', bottom=False)
     ax1.set_title('Y Offset (m)')
@@ -131,7 +133,7 @@ def plot_offsets(df: pd.DataFrame, output_path: Path):
     vmin = np.nanmean(x_offset.flatten()) - 3 * np.nanstd(x_offset.flatten())
     vmax = np.nanmean(x_offset.flatten()) + 3 * np.nanstd(x_offset.flatten())
     im2 = ax2.imshow(x_offset, cmap='coolwarm', vmin=vmin, vmax=vmax)
-    ax2.xaxis.set_ticks_position('top')    # Moves the ticks
+    ax2.xaxis.set_ticks_position('top')  # Moves the ticks
     ax2.xaxis.set_label_position('top')
     ax2.tick_params(axis='x', bottom=False)
     ax2.set_title('X Offset (m)')
@@ -194,7 +196,7 @@ def run(args):
 
 
 def main():
-    parser = ArgumentParser(description='Relative Location Error (RLE) analysis')
+    parser = ArgumentParser(description=__doc__)
     parser = create_parser(parser)
     args = parser.parse_args()
     run(args)

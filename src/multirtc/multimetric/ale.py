@@ -1,3 +1,5 @@
+"""Absolute Location Error (ALE) analysis"""
+
 from argparse import ArgumentParser
 from datetime import datetime
 from pathlib import Path
@@ -238,7 +240,7 @@ def run(args):
 
 
 def main():
-    parser = ArgumentParser(description='Absolute Location Error (ALE) analysis')
+    parser = ArgumentParser(description=__doc__)
     parser = create_parser(parser)
     args = parser.parse_args()
     run(args)
