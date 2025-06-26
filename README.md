@@ -9,7 +9,9 @@ A python library for creating ISCE3-based RTCs for multiple SAR data sources
 > All credit for this library's RTC algorithm goes to Gustavo Shiroma and the JPL [OPERA](https://www.jpl.nasa.gov/go/opera/about-opera/) and [ISCE3](https://github.com/isce-framework/isce3) teams. This package merely allows others to use their algorithm with a wider set of SAR data sources. The RTC algorithm utilized by this package is described in [Shiroma et al., 2023](https://doi.org/10.1109/TGRS.2022.3147472).
 
 ## Usage
-MultiRTC allows users to create RTC products from SLC data for multiple SAR sensor platforms. Currently this list includes:
+MultiRTC allows users to create RTC products from SLC data for multiple SAR sensor platforms, and provides utilities for assessing the resulting products. All utilities can be accessed via CLI pattern `multirtc SUBCOMMAND ARGS`, with the primary subcommand `multirtc rtc`.
+
+Currently the list of supported datasets includes:
 
 Full RTC:
 - [Sentinel-1 Burst SLCs](https://www.earthdata.nasa.gov/data/catalog/alaska-satellite-facility-distributed-active-archive-center-sentinel-1-bursts-version)
@@ -22,7 +24,7 @@ Geocode Only:
 To create an RTC, use the `multirtc` CLI entrypoint using the following pattern:
 
 ```bash
-multirtc PLATFORM SLC-GRANULE --resolution RESOLUTION --work-dir WORK-DIR
+multirtc rtc PLATFORM SLC-GRANULE --resolution RESOLUTION --work-dir WORK-DIR
 ```
 Where `PLATFORM` is the name of the satellite platform (currently `S1`, `CAPELLA`, `ICEYE` or `UMBRA`), `SLC-GRANULE` is the name of the SLC granule, `RESOLUTION` is the desired output resolution of the RTC image in meters, and `WORK-DIR` is the name of the working directory to perform processing in. Inputs such as the SLC data, DEM, and external orbit information are stored in `WORK-DIR/input`, while the RTC image and associated outputs are stored in `WORK-DIR/output` once processing is complete. SLC data that is available in the [Alaska Satellite Facility's data archive](https://search.asf.alaska.edu/#/?maxResults=250) (such as Sentinel-1 Burst SLCs) will be automatically downloaded to the input directory, but data not available in this archive (commercial datasets) are required to be staged in the input directory prior to processing.
 
@@ -33,6 +35,36 @@ Currently, the Umbra processor only supports basic geocoding and not full RTC pr
 
 ### DEM options
 Currently, only the OPERA DEM is supported. This is a global Height Above Ellipsoid DEM sourced from the [COP-30 DEM](https://portal.opentopography.org/raster?opentopoID=OTSDEM.032021.4326.3). In the future, we hope to support a wider variety of automatically retrieved and user provided DEMs.
+
+## Calibration & Validation Subcommands
+MultiRTC includes three calibration and validation (cal/val) subcommands for assessing the geometric and radiometric quality of SAR products. These tools are useful for analyzing geolocation, co-registration, and impulse response performance.
+
+### `ale` Absolute Location Error
+Quantifies the geolocation accuracy of a SAR image by comparing known corner reflectors at the Rosamond, California site with their positions in the geocoded image.
+
+Usage:
+```bash
+multirtc ale FILEPATH DATE AZMANGLE PROJECT --basedir BASEDIR
+```
+See `multirtc ale --help` for descriptions of each argument.
+
+### `rle` Relative Location Error
+Measures the relative alignment of overlapping geocoded SAR images by measuring the offsets between each 1024x1024 pixel chunk of the images.
+
+Usage:
+```bash
+multirtc rle REFPATH SECPATH PROJECT --basedir BASEDIR
+```
+See `multirtc rle --help` for descriptions of each argument.
+
+### `pt` Point Target Analysis
+Evaluates the impulse response of corner reflector at the Rosamond, California site in the SAR image, including resolution, peak to side-lobe ratio (PSLR), and integrated side-lobe ratio (ISLR).
+
+Usage:
+```bash
+multirtc pt FILEPATH DATE AZMANGLE PROJECT --basedir BASEDIR
+```
+See `multirtc pt --help` for descriptions of each argument.
 
 ## When will support for [insert SAR provider here] products be added?
 We're currently working on this package on a "best effort" basis with no specific timeline for any particular dataset. We would love to add support for every SAR dataset ASAP, but we only have so much time to devote to this package. If you want a particular dataset to be prioritized there are several things you can do:

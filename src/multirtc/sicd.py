@@ -17,6 +17,14 @@ def check_poly_order(poly):
     assert len(poly.Coefs) == poly.order1 + 1, 'Polynomial order does not match number of coefficients'
 
 
+def reformat_for_isce(data: np.ndarray, az_reversed: bool) -> np.ndarray:
+    """Reformat the SICD data to match ISCE3 expectations."""
+    if az_reversed:
+        return data[:, ::-1].T
+    else:
+        return data.T
+
+
 class SicdSlc:
     """Base class for SICD SLCs."""
 
@@ -80,6 +88,15 @@ class SicdSlc:
         ycol = icol * self.spacing[1]
         return xrow, ycol
 
+    def load_data(self, rowrange: tuple | None = None, colrange: tuple | None = None):
+        if colrange is not None and rowrange is not None:
+            data = self.reader[rowrange[0] : rowrange[1], colrange[0] : colrange[1]]
+        elif colrange is None and rowrange is None:
+            data = self.reader[:, :]
+        else:
+            raise ValueError('Both xrange and yrange must be provided or neither.')
+        return data
+
     def load_scaled_data(
         self, scale: str, power: bool = False, rowrange: tuple | None = None, colrange: tuple | None = None
     ) -> np.ndarray:
@@ -101,14 +118,8 @@ class SicdSlc:
         else:
             raise ValueError(f'Scale must be either "beta0" or "sigma0", got {scale}')
 
+        data = self.load_data(rowrange=rowrange, colrange=colrange)
         xrow, ycol = self.get_xrow_ycol(rowrange=rowrange, colrange=colrange)
-        if colrange is not None and rowrange is not None:
-            data = self.reader[rowrange[0] : rowrange[1], colrange[0] : colrange[1]]
-        elif colrange is None and rowrange is None:
-            data = self.reader[:, :]
-        else:
-            raise ValueError('Both xrange and yrange must be provided or neither.')
-
         scale_factor = polyval2d(xrow, ycol, coeff)
         del xrow, ycol  # deleting for memory management
 
@@ -116,6 +127,7 @@ class SicdSlc:
             data = (data.real**2 + data.imag**2) * scale_factor
         else:
             data = data * np.sqrt(scale_factor)
+
         return data
 
     def create_complex_beta0(self, outpath: str, row_iter: int = 256) -> None:
@@ -138,10 +150,7 @@ class SicdSlc:
             colrange = [0, self.shape[1]]
             scaled_data = self.load_scaled_data('beta0', power=False, rowrange=rowrange, colrange=colrange)
             # Shape transposed for ISCE3 expectations
-            if self.az_reversed:
-                scaled_data = scaled_data[:, ::-1].T
-            else:
-                scaled_data = scaled_data.T
+            scaled_data = reformat_for_isce(scaled_data, self.az_reversed)
             # Offset transposed to match ISCE3 expectations
             band.WriteArray(scaled_data, xoff=start_row, yoff=0)
 
