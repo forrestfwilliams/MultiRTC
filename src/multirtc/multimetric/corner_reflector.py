@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pyproj
 import requests
-from pyproj import Transformer, transform
+from pyproj import Transformer
 from shapely.geometry import Point, box
 
 
