@@ -20,9 +20,10 @@ dependencies:
   - tqdm
   - hyp3lib
   # For multimetric
-  - pandas
   - matplotlib
+  - pandas
   - lmfit
+  - scipy
   - scikit-image
   # For packaging, and testing
   - setuptools
