@@ -1,3 +1,5 @@
+"""Create an RTC dataset for a multiple satellite platforms"""
+
 import argparse
 from pathlib import Path
 
@@ -86,6 +88,20 @@ def run_multirtc(platform: str, granule: str, resolution: int, work_dir: Path) -
         pfa_prototype_geocode(slc, geogrid, dem_path, output_dir)
 
 
+def create_parser(parser):
+    parser.add_argument('platform', choices=SUPPORTED, help='Platform to create RTC for')
+    parser.add_argument('granule', help='Data granule to create an RTC for.')
+    parser.add_argument('--resolution', type=float, help='Resolution of the output RTC (m)')
+    parser.add_argument('--work-dir', type=Path, default=None, help='Working directory for processing')
+    return parser
+
+
+def run(args):
+    if args.work_dir is None:
+        args.work_dir = Path.cwd()
+    run_multirtc(args.platform, args.granule, args.resolution, args.work_dir)
+
+
 def main():
     """Create a RTC or geocoded dataset for a multiple satellite platforms
 
@@ -93,15 +109,9 @@ def main():
     multirtc UMBRA umbra_image.ntif --resolution 40
     """
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('platform', choices=SUPPORTED, help='Platform to create RTC for')
-    parser.add_argument('granule', help='Data granule to create an RTC for.')
-    parser.add_argument('--resolution', default=30, type=float, help='Resolution of the output RTC (m)')
-    parser.add_argument('--work-dir', type=Path, default=None, help='Working directory for processing')
+    parser = create_parser(parser)
     args = parser.parse_args()
-
-    if args.work_dir is None:
-        args.work_dir = Path.cwd()
-    run_multirtc(args.platform, args.granule, args.resolution, args.work_dir)
+    run(args)
 
 
 if __name__ == '__main__':

@@ -19,6 +19,11 @@ dependencies:
   - burst2safe
   - tqdm
   - hyp3lib
+  # For multimetric
+  - pandas
+  - matplotlib
+  - lmfit
+  - scikit-image
   # For packaging, and testing
   - setuptools
   - setuptools_scm

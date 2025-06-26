@@ -32,23 +32,22 @@ dependencies = [
     "burst2safe",
     "tqdm",
     "hyp3lib",
+    "pandas",
+    "matplotlib",
+    "lmfit",
+    "scikit-image",
 ]
 dynamic = ["version", "readme"]
 
 [project.optional-dependencies]
-develop = [
-    "pytest",
-    "pytest-cov",
-    "pytest-console-scripts",
-    "ruff",
-]
+develop = ["pytest", "pytest-cov", "pytest-console-scripts", "ruff"]
 
 [project.urls]
 Homepage = "https://github.com/forrestfwilliams/multirtc"
 Documentation = "https://github.com/forrestfwilliams/multirtc"
 
 [project.scripts]
-multirtc = "multirtc.multirtc:main"
+multirtc = "multirtc.__main__:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
