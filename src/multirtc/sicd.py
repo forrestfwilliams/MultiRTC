@@ -244,21 +244,29 @@ class SicdPfaSlc(Slc, SicdSlc):
         self.coa_time = self.raw_time_coa_poly.Coefs[0][0]
         self.arp_vel = self.source.SCPCOA.ARPVel.get_array()
         self.scp_time = self.reference_time + timedelta(self.source.SCPCOA.SCPTime)
-        self.sensing_start = self.coa_time
         self.pfa_vars = self.source.PFA
-        self.orbit = self.get_orbit()
         self.rrdot_offset = self.calculate_range_range_rate_offset()
         self.transform_matrix = self.calculate_transform_matrix()
         self.transform_matrix_inv = np.linalg.inv(self.transform_matrix)
+        ### RZD transform
+        col_uvect = self.source.Grid.Col.UVectECF.get_array()
+        self.azimuth_velocity = np.abs(np.dot(self.arp_vel, col_uvect) / np.linalg.norm(col_uvect))
+        self.azimuth_time_interval = self.source.Grid.Row.SS / self.azimuth_velocity
+        self.prf = 1 / self.azimuth_time_interval
+        self.sensing_start = self.source.SCPCOA.SCPTime - (self.scp_index[1] * self.azimuth_time_interval)
+        self.orbit = self.get_orbit()
+        self.starting_range = self.get_starting_range()
+        self.radar_grid = self.get_radar_grid()
+        self.doppler_centroid_grid = isce3.core.LUT2d()
+        self.rowcol2geo(np.array([[0, 0]]), self.scp_hae)
+        breakpoint()
         # TOOD: this may not always be true, will need to figure out a way to check
         self.az_reversed = False
-        # Without ISCE3 support for PFA grids, these properties are undefined
-        self.starting_range = np.nan
-        self.radar_grid = None
-        self.doppler_centroid_grid = None
-        self.prf = np.nan
-        self.az_reversed = False
         self.supports_rtc = False
+
+    def get_rzd_shape(self):
+        """Define a rectangular region in Range-Zero Doppler space for the PFA data"""
+        pass
 
     def get_orbit(self) -> isce3.core.Orbit:
         """Define the orbit for the SLC.
@@ -267,14 +275,13 @@ class SicdPfaSlc(Slc, SicdSlc):
         Returns:
             An instance of isce3.core.Orbit representing the orbit.
         """
+        sensing_start = self.reference_time + timedelta(seconds=self.sensing_start)
         svs = []
-        sensing_start_isce = to_isce_datetime(self.scp_time)
         for offset_sec in range(-10, 10):
-            t = self.scp_time + timedelta(offset_sec)
-            t_isce = to_isce_datetime(t)
+            time = to_isce_datetime(sensing_start + timedelta(seconds=offset_sec))
             pos = self.arp_vel * offset_sec + self.arp_pos
-            svs.append(isce3.core.StateVector(t_isce, pos, self.arp_vel))
-        return isce3.core.Orbit(svs, sensing_start_isce)
+            svs.append(isce3.core.StateVector(time, pos, self.arp_vel))
+        return isce3.core.Orbit(svs, to_isce_datetime(self.reference_time))
 
     def calculate_range_range_rate_offset(self) -> np.ndarray:
         """Calculate the range and range rate offset for PFA data.
@@ -333,6 +340,7 @@ class SicdPfaSlc(Slc, SicdSlc):
         """
         dem = isce3.geometry.DEMInterpolator(hae)
         elp = isce3.core.Ellipsoid()
+        breakpoint()
         rgaz = (rc - np.array(self.shift)[None, :]) * np.array(self.spacing)[None, :]
         rrdot = np.dot(self.transform_matrix, rgaz.T) + self.rrdot_offset[:, None]
         side = isce3.core.LookSide(1) if self.lookside == 'left' else isce3.core.LookSide(-1)
@@ -407,3 +415,42 @@ class SicdPfaSlc(Slc, SicdSlc):
         )
         geogrid_snapped = define_geogrid.snap_geogrid(geogrid, geogrid.spacing_x, geogrid.spacing_y)
         return geogrid_snapped
+
+    def get_starting_range(self) -> float:
+        ycol = -self.shift[1] * self.spacing[1]
+        xrow = -self.shift[0] * self.spacing[0]  # fixing to first row
+        arp_pos, _ = self.orbit.interpolate(self.sensing_start)
+        row_offset = self.source.Grid.Row.UVectECF.get_array() * xrow
+        col_offset = self.source.Grid.Col.UVectECF.get_array() * ycol
+        grid_pos = self.source.GeoData.SCP.ECF.get_array() + row_offset + col_offset
+        starting_range = np.linalg.norm(arp_pos - grid_pos)
+        return starting_range
+
+    def get_radar_grid(self) -> isce3.product.RadarGridParameters:
+        """Define the radar grid parameters for the SLC.
+
+        Returns:
+            An instance of isce3.product.RadarGridParameters representing the radar grid.
+        """
+        radar_grid = isce3.product.RadarGridParameters(
+            sensing_start=self.sensing_start,
+            wavelength=self.wavelength,
+            prf=self.prf,
+            starting_range=self.starting_range,
+            range_pixel_spacing=self.range_pixel_spacing,
+            lookside=isce3.core.LookSide.Right if self.lookside == 'right' else isce3.core.LookSide.Left,
+            length=self.shape[1],  # flipped for "shadows down" convention
+            width=self.shape[0],  # flipped for "shadows down" convention
+            ref_epoch=to_isce_datetime(self.reference_time),
+        )
+        return radar_grid
+
+    def get_rzd_index_grid(self):
+        pass
+
+    def resample_to_rzd(self):
+        # https://github.com/isce-framework/isce3/blob/develop/cxx/isce3/image/Resample.cpp
+        # https://github.com/isce-framework/isce3/blob/968e78fb90e09fd69d34770fc6ab238ac2b0fdcb/python/packages/isce3/image/v2/resample_slc.py#L361
+        # rzd -> g -> pfa
+        # for correct use of resample_to_coords, a doppler frequency grid must be created with dimensions (xrow, ycol)
+        pass
