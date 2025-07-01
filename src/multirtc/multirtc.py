@@ -61,19 +61,22 @@ def get_slc(platform: str, granule: str, input_dir: Path) -> Slc:
     return slc
 
 
-def run_multirtc(platform: str, granule: str, resolution: int, work_dir: Path) -> None:
+def run_multirtc(platform: str, granule: str, resolution: int, dem_path: Path | None, work_dir: Path) -> None:
     """Create an RTC or Geocoded dataset using the OPERA algorithm.
 
     Args:
         platform: Platform type (e.g., 'UMBRA').
         granule: Granule name if data is available in ASF archive, or filename if granule is already downloaded.
         resolution: Resolution of the output RTC (in meters).
+        dem_path: Path to the DEM to use for processing. If None, the NISAR DEM will be downloaded.
         work_dir: Working directory for processing.
     """
     input_dir, output_dir = prep_dirs(work_dir)
     slc = get_slc(platform, granule, input_dir)
-    dem_path = input_dir / 'dem.tif'
-    dem.download_opera_dem_for_footprint(dem_path, slc.footprint)
+    if dem_path is None:
+        dem_path = input_dir / 'dem.tif'
+        dem.download_opera_dem_for_footprint(dem_path, slc.footprint)
+    dem.validate_dem(dem_path, slc.footprint)
     geogrid = slc.create_geogrid(spacing_meters=resolution)
     if slc.supports_rtc:
         opts = RtcOptions(
@@ -92,14 +95,17 @@ def create_parser(parser):
     parser.add_argument('platform', choices=SUPPORTED, help='Platform to create RTC for')
     parser.add_argument('granule', help='Data granule to create an RTC for.')
     parser.add_argument('--resolution', type=float, help='Resolution of the output RTC (m)')
+    parser.add_argument('--dem', type=Path, default=None, help='Path to the DEM to use for processing')
     parser.add_argument('--work-dir', type=Path, default=None, help='Working directory for processing')
     return parser
 
 
 def run(args):
+    if args.dem is not None:
+        assert args.dem.exists(), f'DEM file {args.dem} does not exist.'
     if args.work_dir is None:
         args.work_dir = Path.cwd()
-    run_multirtc(args.platform, args.granule, args.resolution, args.work_dir)
+    run_multirtc(args.platform, args.granule, args.resolution, args.dem, args.work_dir)
 
 
 def main():

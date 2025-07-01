@@ -1,16 +1,68 @@
 from concurrent.futures import ThreadPoolExecutor
 from itertools import product
 from pathlib import Path
+from shutil import copyfile
+from tempfile import NamedTemporaryFile
 
 import numpy as np
 import shapely
 from hyp3lib.fetch import download_file
-from osgeo import gdal
+from osgeo import gdal, osr
 from shapely.geometry import LinearRing, Polygon, box
 
 
 gdal.UseExceptions()
 URL = 'https://nisar.asf.earthdatacloud.nasa.gov/STATIC/DEM/v1.1/EPSG4326'
+EGM2008_GEOID = {
+    'world': [
+        '/vsicurl/https://asf-dem-west.s3.amazonaws.com/GEOID/us_nga_egm2008_1.tif',
+        box(-180.0083333, -90.0083333, 180.0083333, 90.0083333),
+    ]
+}
+NAD88 = {
+    'conus': [
+        '/vsicurl/https://asf-dem-west.s3.amazonaws.com/GEOID/us_noaa_g2012bu0.tif',
+        box(-130.0083313, 23.9916667, -59.9920366, 58.0083351),
+    ],
+    'ak_east': [
+        '/vsicurl/https://asf-dem-west.s3.amazonaws.com/GEOID/us_noaa_g2012ba0_east.tif',
+        box(171.9916687, 48.9916583, 234.008, 72.008),
+    ],
+    'ak_west': [
+        '/vsicurl/https://asf-dem-west.s3.amazonaws.com/GEOID/us_noaa_g2012ba0_west.tif',
+        box(-188.008, 48.992, -125.9915921, 72.0083313),
+    ],
+}
+VALID_DATUMS = ['WGS84', 'EGM2008', 'NAD88']
+
+
+def get_bbox_from_info(info: dict) -> Polygon:
+    minx = info['cornerCoordinates']['lowerLeft'][0]
+    miny = info['cornerCoordinates']['lowerLeft'][1]
+    maxx = info['cornerCoordinates']['upperRight'][0]
+    maxy = info['cornerCoordinates']['upperRight'][1]
+    return box(minx, miny, maxx, maxy)
+
+
+def validate_dem(dem_path: Path, footprint: Polygon) -> None:
+    """Validate that the DEM file is in EPSG:4326 and contains the given footprint.
+
+    Args:
+        dem_path: Path to the DEM file.
+        footprint: Polygon representing the area of interest.
+
+    Raises:
+        ValueError: If the DEM does not cover the footprint.
+    """
+    info = gdal.Info(str(dem_path), format='json')
+
+    srs = osr.SpatialReference()
+    srs.ImportFromWkt(info['coordinateSystem']['wkt'])
+    assert int(srs.GetAttrValue('AUTHORITY', 1)) == 4326, f'DEM file {dem_path} is not in EPSG:4326 projection.'
+
+    dem_extent = get_bbox_from_info(info)
+    if not dem_extent.contains(footprint):
+        raise ValueError(f'DEM does not fully cover the footprint: {footprint}')
 
 
 def check_antimeridean(poly: Polygon) -> list[Polygon]:
@@ -126,3 +178,70 @@ def download_opera_dem_for_footprint(output_path: Path, footprint: Polygon, buff
 
     ds = None
     [Path(f).unlink() for f in input_files + [vrt_filepath]]
+
+
+def get_correction_geoid(bbox: Polygon, input_datum: str) -> str:
+    """Get the path to the geoid correction file based on the bounding box and input datum."""
+    if input_datum.lower() == 'egm2008':
+        return EGM2008_GEOID['world'][0]
+
+    if input_datum.lower() == 'nad88':
+        for region, (correction_path, region_bbox) in NAD88.items():
+            if bbox.intersects(region_bbox):
+                return correction_path
+
+    raise ValueError(f'No suitable geoid correction found for datum {input_datum} and bounding box {bbox}.')
+
+
+def convert_to_height_above_ellipsoid(dem_file: Path, input_datum) -> None:
+    assert input_datum in VALID_DATUMS, f'Input datum must be one of {VALID_DATUMS}, got {input_datum}.'
+    if input_datum.lower() == 'wgs84':
+        return
+    dem_info = gdal.Info(str(dem_file), format='json')
+    dem_bbox = get_bbox_from_info(dem_info)
+    correction_path = get_correction_geoid(dem_bbox, input_datum)
+    with NamedTemporaryFile() as geoid_file:
+        gdal.Warp(
+            geoid_file.name,
+            correction_path,
+            dstSRS=dem_info['coordinateSystem']['wkt'],
+            outputBounds=dem_bbox.bounds,
+            width=dem_info['size'][0],
+            height=dem_info['size'][1],
+            resampleAlg='cubic',
+            multithread=True,
+            format='GTiff',
+        )
+        geoid_ds = gdal.Open(geoid_file.name)
+        geoid_data = geoid_ds.GetRasterBand(1).ReadAsArray()
+        del geoid_ds
+
+        dem_ds = gdal.Open(str(dem_file), gdal.GA_Update)
+        dem_data = dem_ds.GetRasterBand(1).ReadAsArray()
+        dem_data += geoid_data
+        dem_ds.GetRasterBand(1).WriteArray(dem_data)
+        dem_ds.FlushCache()
+        del dem_ds
+
+
+def prep_dem(input_path: Path, input_datum: str, output_path: Path) -> None:
+    """Prepare the DEM for processing by reprojecting it to EPSG:4326 and (optionally) converting it to height above ellipsoid.
+
+    Args:
+        dem_path: Path to the DEM file. If None, the NISAR DEM will be downloaded.
+        input_datum: Datum of the input DEM, either 'WGS84', 'EGM2008', 'NAD88'.
+        output_path: Path where the prepared DEM will be saved.
+    """
+    copyfile(input_path, output_path)
+    info = gdal.Info(str(input_path), format='json')
+    srs = osr.SpatialReference()
+    srs.ImportFromWkt(info['coordinateSystem']['wkt'])
+    if int(srs.GetAttrValue('AUTHORITY', 1)) != 4326:
+        gdal.Warp(
+            str(output_path),
+            str(output_path),
+            dstSRS='EPSG:4326',
+            resampleAlg='cubic',
+            multithread=True,
+        )
+    convert_to_height_above_ellipsoid(output_path, input_datum.lower())
