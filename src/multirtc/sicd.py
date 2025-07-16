@@ -252,13 +252,12 @@ class SicdPfaSlc(Slc, SicdSlc):
         self.transform_matrix_inv = np.linalg.inv(self.transform_matrix)
         # TOOD: this may not always be true, will need to figure out a way to check
         self.az_reversed = False
-        # Without ISCE3 support for PFA grids, these properties are undefined
+        self.radar_grid = self.get_radar_grid()
+        self.doppler_centroid_grid = isce3.core.LUT2d()
+        self.supports_rtc = True
+        # Old
         self.starting_range = np.nan
-        self.radar_grid = None
-        self.doppler_centroid_grid = None
         self.prf = np.nan
-        self.az_reversed = False
-        self.supports_rtc = False
 
     def get_orbit(self) -> isce3.core.Orbit:
         """Define the orbit for the SLC.
@@ -275,6 +274,50 @@ class SicdPfaSlc(Slc, SicdSlc):
             pos = self.arp_vel * offset_sec + self.arp_pos
             svs.append(isce3.core.StateVector(t_isce, pos, self.arp_vel))
         return isce3.core.Orbit(svs, sensing_start_isce)
+
+    def get_radar_grid(self) -> isce3.product.PolarGridParameters:
+        """Define the radar grid parameters for the SLC.
+
+        Returns:
+            An instance of isce3.product.RadarGridParameters representing the radar grid.
+        """
+        arp_minus_scp = self.arp_pos - self.scp_pos
+        range_scp_to_coa = np.linalg.norm(arp_minus_scp, axis=-1)
+        range_rate_scp_to_coa = np.sum(self.arp_vel * arp_minus_scp, axis=-1) / range_scp_to_coa
+
+        polar_ang_poly = self.pfa_vars.PolarAngPoly
+        polar_ang_poly_der = polar_ang_poly.derivative(der_order=1, return_poly=True)
+        polar_ang = polar_ang_poly(self.coa_time)
+        polar_ang_rate = polar_ang_poly_der(self.coa_time)
+
+        spatial_freq_sf_poly = self.pfa_vars.SpatialFreqSFPoly
+        spatial_freq_sf_poly_der = spatial_freq_sf_poly.derivative(der_order=1, return_poly=True)
+        polar_aperture_scale_factor = spatial_freq_sf_poly(polar_ang)
+        polar_aperture_scale_factor_rate = spatial_freq_sf_poly_der(polar_ang)
+        
+        radar_grid = isce3.product.PolarGridParameters(
+            sensing_start=0.0,
+            wavelength=self.wavelength,
+            center_range=range_scp_to_coa,
+            center_range_rate=range_rate_scp_to_coa,
+            polar_angle=polar_ang,
+            polar_angle_rate=polar_ang_rate,
+            polar_aperture_scale_factor=polar_aperture_scale_factor,
+            polar_aperture_scale_factor_rate=polar_aperture_scale_factor_rate,
+            range_pixel_spacing=self.source.Grid.Row.SS,
+            azimuth_pixel_spacing=self.source.Grid.Col.SS,
+            range_scene_center=self.shift[0] * self.source.Grid.Row.SS,
+            azimuth_scene_center=self.shift[1] * self.source.Grid.Col.SS,
+            range_start=0.0,
+            azimuth_start=0.0,
+            lookside=isce3.core.LookSide.Right if self.lookside == 'right' else isce3.core.LookSide.Left,
+            # length=self.shape[1],  # flipped for "shadows down" convention
+            # width=self.shape[0],  # flipped for "shadows down" convention
+            length=self.shape[0],  # flipped for "shadows down" convention
+            width=self.shape[1],  # flipped for "shadows down" convention
+            ref_epoch=to_isce_datetime(self.scp_time),
+        )
+        return radar_grid
 
     def calculate_range_range_rate_offset(self) -> np.ndarray:
         """Calculate the range and range rate offset for PFA data.
