@@ -311,8 +311,6 @@ class SicdPfaSlc(Slc, SicdSlc):
             range_start=0.0,
             azimuth_start=0.0,
             lookside=isce3.core.LookSide.Right if self.lookside == 'right' else isce3.core.LookSide.Left,
-            # length=self.shape[1],  # flipped for "shadows down" convention
-            # width=self.shape[0],  # flipped for "shadows down" convention
             length=self.shape[0],  # flipped for "shadows down" convention
             width=self.shape[1],  # flipped for "shadows down" convention
             ref_epoch=to_isce_datetime(self.scp_time),
