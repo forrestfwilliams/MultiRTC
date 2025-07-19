@@ -139,7 +139,6 @@ class SicdSlc:
             row_iter: Number of rows to process in each chunk.
         """
         driver = gdal.GetDriverByName('GTiff')
-        # Shape transposed for ISCE3 expectations
         ds = driver.Create(str(outpath), self.shape[0], self.shape[1], 1, gdal.GDT_CFloat32)
         band = ds.GetRasterBand(1)
         n_chunks = int(np.floor(self.shape[0] // row_iter)) + 1
@@ -294,7 +293,7 @@ class SicdPfaSlc(Slc, SicdSlc):
         spatial_freq_sf_poly_der = spatial_freq_sf_poly.derivative(der_order=1, return_poly=True)
         polar_aperture_scale_factor = spatial_freq_sf_poly(polar_ang)
         polar_aperture_scale_factor_rate = spatial_freq_sf_poly_der(polar_ang)
-        
+
         radar_grid = isce3.product.PolarGridParameters(
             sensing_start=0.0,
             wavelength=self.wavelength,
@@ -311,8 +310,8 @@ class SicdPfaSlc(Slc, SicdSlc):
             range_start=0.0,
             azimuth_start=0.0,
             lookside=isce3.core.LookSide.Right if self.lookside == 'right' else isce3.core.LookSide.Left,
-            length=self.shape[0],  # flipped for "shadows down" convention
-            width=self.shape[1],  # flipped for "shadows down" convention
+            length=self.shape[1],  # flipped for "shadows down" convention
+            width=self.shape[0],  # flipped for "shadows down" convention
             ref_epoch=to_isce_datetime(self.scp_time),
         )
         return radar_grid
