@@ -212,22 +212,23 @@ def compute_layover_shadow_mask(
     slantrange_layover_shadow_mask_raster: isce3.io.Raster
         Layover/shadow-mask ISCE3 raster object in radar coordinates
     """
-    if doppler is None:
-        doppler = isce3.core.LUT2d()
-
     # Run topo to get layover/shadow mask
     ellipsoid = isce3.core.Ellipsoid()
-    grid_doppler = doppler
-    # rdr2geo_obj = isce3.geometry.Rdr2Geo(
-    #     radar_grid,
-    #     orbit,
-    #     ellipsoid,
-    #     grid_doppler,
-    #     threshold=threshold_rdr2geo,
-    #     numiter=numiter_rdr2geo,
-    #     extraiter=extraiter_rdr2geo,
-    #     lines_per_block=lines_per_block_rdr2geo,
-    # )
+    if isinstance(radar_grid, isce3.product.RadarGridParameters):
+        rdr2geo_class = isce3.geometry.Rdr2Geo
+    elif isinstance(radar_grid, isce3.product.PolarGridParameters):
+        rdr2geo_class = isce3.geometry.Rdr2GeoPolar
+
+    rdr2geo_obj = rdr2geo_class(
+        radar_grid,
+        orbit,
+        ellipsoid,
+        doppler,
+        threshold=threshold_rdr2geo,
+        numiter=numiter_rdr2geo,
+        extraiter=extraiter_rdr2geo,
+        lines_per_block=lines_per_block_rdr2geo,
+    )
 
     if shadow_dilation_size > 0:
         path_layover_shadow_mask_file = os.path.join(scratch_dir, 'layover_shadow_mask_slant_range.tif')
@@ -239,7 +240,7 @@ def compute_layover_shadow_mask(
             'layover_shadow_mask', radar_grid.width, radar_grid.length, 1, gdal.GDT_Byte, 'MEM'
         )
 
-    # rdr2geo_obj.topo(dem_raster, layover_shadow_raster=slantrange_layover_shadow_mask_raster)
+    rdr2geo_obj.topo(dem_raster, layover_shadow_raster=slantrange_layover_shadow_mask_raster)
 
     if shadow_dilation_size > 1:
         """

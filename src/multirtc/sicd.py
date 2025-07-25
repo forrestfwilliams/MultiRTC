@@ -252,7 +252,7 @@ class SicdPfaSlc(Slc, SicdSlc):
         # TOOD: this may not always be true, will need to figure out a way to check
         self.az_reversed = False
         self.radar_grid = self.get_radar_grid()
-        self.doppler_centroid_grid = isce3.core.LUT2d()
+        self.doppler_centroid_grid = self.get_doppler_centroid_grid()
         self.supports_rtc = True
         # Old
         self.starting_range = np.nan
@@ -305,8 +305,8 @@ class SicdPfaSlc(Slc, SicdSlc):
             polar_aperture_scale_factor_rate=polar_aperture_scale_factor_rate,
             range_pixel_spacing=self.source.Grid.Row.SS,
             azimuth_pixel_spacing=self.source.Grid.Col.SS,
-            range_scene_center=self.shift[0] * self.source.Grid.Row.SS,
-            azimuth_scene_center=self.shift[1] * self.source.Grid.Col.SS,
+            range_scene_center=self.shift[0] * self.spacing[0],
+            azimuth_scene_center=self.shift[1] * self.spacing[1],
             range_start=0.0,
             azimuth_start=0.0,
             lookside=isce3.core.LookSide.Right if self.lookside == 'right' else isce3.core.LookSide.Left,
@@ -315,6 +315,23 @@ class SicdPfaSlc(Slc, SicdSlc):
             ref_epoch=to_isce_datetime(self.scp_time),
         )
         return radar_grid
+
+    def get_doppler_centroid_grid(self):
+        az_start = self.radar_grid.azimuth_start
+        az_spacing = self.radar_grid.azimuth_pixel_spacing * 10
+        az_end = az_start + (self.radar_grid.length * self.radar_grid.azimuth_pixel_spacing) + az_spacing
+        azimuths = np.arange(az_start, az_end, az_spacing)
+
+        rg_start = self.radar_grid.range_start
+        rg_spacing = self.radar_grid.range_pixel_spacing * 10
+        rg_end = rg_start + (self.radar_grid.width * self.radar_grid.range_pixel_spacing) + rg_spacing
+        ranges = np.arange(rg_start, rg_end, rg_spacing)
+
+        dopplers = np.zeros((azimuths.shape[0], ranges.shape[0]))
+        for i in range(azimuths.shape[0]):
+            for j in range(ranges.shape[0]):
+                dopplers[i,j] = self.radar_grid.doppler(azimuths[i], ranges[j])
+        return isce3.core.LUT2d(ranges, azimuths, dopplers)
 
     def calculate_range_range_rate_offset(self) -> np.ndarray:
         """Calculate the range and range rate offset for PFA data.
@@ -381,8 +398,34 @@ class SicdPfaSlc(Slc, SicdSlc):
         for pt in rrdot.T:
             r = pt[0]
             dop = -pt[1] * 2 / wvl
+            print(pt[0], pt[1])
+            print(dop)
             llh = isce3.geometry.rdr2geo(0.0, r, self.orbit, side, dop, wvl, dem, threshold=1.0e-8, maxiter=50)
             pts_ecf.append(elp.lon_lat_to_xyz(llh))
+        return np.vstack(pts_ecf)
+
+    def rowcol2geo2(self, rc: np.ndarray, hae: float) -> np.ndarray:
+        """Transform grid (row, col) coordinates to ECEF coordinates.
+
+        Args:
+            rc: 2D array of (row, col) coordinates
+            hae: Height above ellipsoid (meters)
+
+        Returns:
+            np.ndarray: ECEF coordinates
+        """
+        dem = isce3.geometry.DEMInterpolator(hae)
+        elp = isce3.core.Ellipsoid()
+        rgaz = (rc * np.array(self.spacing)[None, :])[0]
+        r, rr = self.radar_grid.range_range_rate(rgaz[1], rgaz[0])
+        dop = self.radar_grid.doppler(rgaz[1], rgaz[0])
+        print(r, rr)
+        print(dop)
+        side = isce3.core.LookSide(1) if self.lookside == 'left' else isce3.core.LookSide(-1)
+        pts_ecf = []
+        wvl = 1.0
+        llh = isce3.geometry.rdr2geo(0.0, r, self.orbit, side, dop, wvl, dem, threshold=1.0e-8, maxiter=50)
+        pts_ecf.append(elp.lon_lat_to_xyz(llh))
         return np.vstack(pts_ecf)
 
     def geo2rowcol(self, xyz: np.ndarray) -> np.ndarray:
