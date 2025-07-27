@@ -111,7 +111,9 @@ def get_geogrid_poly(geogrid: isce3.product.GeoGridParameters) -> Polygon:
     return poly
 
 
-def generate_geogrids(slc, spacing_meters: int, epsg: int) -> isce3.product.GeoGridParameters:
+def generate_geogrids(
+    slc, spacing_meters: int, epsg: int, dem_path: str | None = None
+) -> isce3.product.GeoGridParameters:
     """Compute a geogrid based on the radar grid of the SLC and the specified spacing.
 
     Args:
@@ -124,8 +126,30 @@ def generate_geogrids(slc, spacing_meters: int, epsg: int) -> isce3.product.GeoG
     """
     x_spacing = spacing_meters
     y_spacing = -1 * np.abs(spacing_meters)
+
+    if dem_path is None:
+        min_height = isce3.core.MINIMUM_HEIGHT
+        max_height = isce3.core.MAXIMUM_HEIGHT
+    else:
+        dem_raster = isce3.io.Raster(str(dem_path))
+        dem = isce3.geometry.DEMInterpolator()
+        # FIXME: figure out why load with bounds doesn't work
+        # minx, miny, maxx, maxy = slc.footprint.bounds
+        # dem.load_dem(dem_raster, min_x=minx, max_x=maxx, min_y=miny, max_y=maxy)
+        dem.load_dem(dem_raster)
+        dem.compute_min_max_mean_height()
+        min_height = dem.min_height
+        max_height = dem.max_height
+
     geogrid = isce3.product.bbox_to_geogrid(
-        slc.radar_grid, slc.orbit, slc.doppler_centroid_grid, x_spacing, y_spacing, epsg
+        slc.radar_grid,
+        slc.orbit,
+        slc.doppler_centroid_grid,
+        x_spacing,
+        y_spacing,
+        epsg,
+        min_height=min_height,
+        max_height=max_height,
     )
     geogrid_snapped = snap_geogrid(geogrid, geogrid.spacing_x, geogrid.spacing_y)
     return geogrid_snapped

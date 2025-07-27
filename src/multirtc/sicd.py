@@ -139,6 +139,7 @@ class SicdSlc:
             row_iter: Number of rows to process in each chunk.
         """
         driver = gdal.GetDriverByName('GTiff')
+        # Shape transposed for ISCE3 expectations
         ds = driver.Create(str(outpath), self.shape[0], self.shape[1], 1, gdal.GDT_CFloat32)
         band = ds.GetRasterBand(1)
         n_chunks = int(np.floor(self.shape[0] // row_iter)) + 1
@@ -316,15 +317,23 @@ class SicdPfaSlc(Slc, SicdSlc):
         )
         return radar_grid
 
-    def get_doppler_centroid_grid(self):
-        az_start = self.radar_grid.azimuth_start
-        az_spacing = self.radar_grid.azimuth_pixel_spacing * 10
-        az_end = az_start + (self.radar_grid.length * self.radar_grid.azimuth_pixel_spacing) + az_spacing
+    def get_doppler_centroid_grid(self, uplook=10, buffer=10):
+        az_spacing = self.radar_grid.azimuth_pixel_spacing * uplook
+        az_start = self.radar_grid.azimuth_start - (buffer * az_spacing)
+        az_end = (
+            self.radar_grid.azimuth_start
+            + (self.radar_grid.length * self.radar_grid.azimuth_pixel_spacing)
+            + ((buffer + 1) * az_spacing)
+        )
         azimuths = np.arange(az_start, az_end, az_spacing)
 
-        rg_start = self.radar_grid.range_start
-        rg_spacing = self.radar_grid.range_pixel_spacing * 10
-        rg_end = rg_start + (self.radar_grid.width * self.radar_grid.range_pixel_spacing) + rg_spacing
+        rg_spacing = self.radar_grid.range_pixel_spacing * uplook
+        rg_start = self.radar_grid.range_start - (buffer * rg_spacing)
+        rg_end = (
+            self.radar_grid.range_start
+            + (self.radar_grid.width * self.radar_grid.range_pixel_spacing)
+            + ((buffer + 1) * az_spacing)
+        )
         ranges = np.arange(rg_start, rg_end, rg_spacing)
 
         dopplers = np.zeros((azimuths.shape[0], ranges.shape[0]))
@@ -333,8 +342,8 @@ class SicdPfaSlc(Slc, SicdSlc):
                 dopplers[i, j] = self.radar_grid.doppler(azimuths[i], ranges[j])
         return isce3.core.LUT2d(ranges, azimuths, dopplers)
 
-    def create_geogrid(self, spacing_meters: int) -> isce3.product.GeoGridParameters:
-        return define_geogrid.generate_geogrids(self, spacing_meters, self.local_epsg)
+    def create_geogrid(self, spacing_meters: int, dem_path: Path) -> isce3.product.GeoGridParameters:
+        return define_geogrid.generate_geogrids(self, spacing_meters, self.local_epsg, dem_path=dem_path)
 
     def calculate_range_range_rate_offset(self) -> np.ndarray:
         """Calculate the range and range rate offset for PFA data.

@@ -118,6 +118,7 @@ def download_opera_dem_for_footprint(output_path: Path, footprint: Polygon, buff
     with ThreadPoolExecutor(max_workers=4) as executor:
         executor.map(lambda url: download_file(url, str(output_dir)), urls)
 
+    # [download_file(url, str(output_dir)) for url in urls]
     vrt_filepath = output_dir / 'dem.vrt'
     input_files = [str(output_dir / Path(url).name) for url in urls]
     gdal.BuildVRT(str(output_dir / 'dem.vrt'), input_files)
