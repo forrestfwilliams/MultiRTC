@@ -47,6 +47,9 @@ def get_slc(platform: str, granule: str, input_dir: Path) -> Slc:
     """
     if platform == 'S1':
         safe_path = burst2safe(granules=[granule], all_anns=True, work_dir=input_dir)
+        # safe_path = Path(
+        #     '/Users/ffwilliams2/Data/s1tmp/input/S1A_IW_SLC__1SSV_20220111T020806_20220111T020806_041407_04EC5E_77CA.SAFE'
+        # )
         orbit_path = Path(retrieve_orbit_file(safe_path.name, str(input_dir), concatenate=True))
         slc = S1BurstSlc(safe_path, orbit_path, granule)
     elif platform in ['CAPELLA', 'ICEYE', 'UMBRA']:
@@ -122,6 +125,7 @@ def run_multirtc(platform: str, granule: str, resolution: int, work_dir: Path, a
     dem_path = input_dir / 'dem.tif'
     dem.download_opera_dem_for_footprint(dem_path, slc.footprint)
     geogrid = slc.create_geogrid(spacing_meters=resolution, dem_path=dem_path)
+    breakpoint()
     if slc.supports_rtc:
         opts = RtcOptions(
             dem_path=str(dem_path),
