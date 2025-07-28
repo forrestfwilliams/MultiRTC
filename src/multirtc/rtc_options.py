@@ -29,6 +29,7 @@ class RtcOptions:
     clip_max: float = np.nan
     upsample_radar_grid: bool = False
     terrain_radiometry: str = 'gamma0'  # 'gamma0' or 'sigma0'
+    # rtc_algorithm_type: str = 'area_projection'  # 'area_projection' or 'bilinear_distribution'
     rtc_algorithm_type: str = 'area_projection'  # 'area_projection' or 'bilinear_distribution'
     input_terrain_radiometry: str = 'beta0'
     rtc_min_value_db: int = -30.0

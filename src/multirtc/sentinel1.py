@@ -60,8 +60,8 @@ class S1BurstSlc(Slc):
         self.supports_bistatic_delay = True
         self.supports_static_tropo = True
 
-    def create_geogrid(self, spacing_meters: int) -> isce3.product.GeoGridParameters:
-        return define_geogrid.generate_geogrids(self, spacing_meters, self.local_epsg)
+    def create_geogrid(self, spacing_meters: int, dem_path: Path | None = None) -> isce3.product.GeoGridParameters:
+        return define_geogrid.generate_geogrids(self, spacing_meters, self.local_epsg, dem_path)
 
     def apply_valid_data_masking(self) -> isce3.product.SubSwaths:
         """Extract burst boundaries and create sub_swaths object to mask invalid radar samples.
