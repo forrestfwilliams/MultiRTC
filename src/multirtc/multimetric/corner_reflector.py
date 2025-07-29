@@ -83,7 +83,7 @@ def get_cr_df(bounds, date, azmangle, outdir):
 def add_geo_image_location(cr_df, geotransform, shape, epsg):
     bounds = get_bounds(geotransform, shape)
     x_start = bounds.bounds[0]
-    y_start = bounds.bounds[1]
+    y_start = bounds.bounds[3]
     x_spacing = geotransform[1]
     y_spacing = geotransform[5]
     blank = [np.nan] * cr_df.shape[0]
