@@ -143,6 +143,7 @@ def plot_offsets(df: pd.DataFrame, output_path: Path):
     plt.colorbar(im2, ax=ax2)
     plt.tight_layout()
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close(fig)
 
 
 def rle(reference_path: Path, secondary_path: Path, project: str, basedir: Path, max_nan_ratio=0.1, max_error=0.01):
@@ -163,8 +164,10 @@ def rle(reference_path: Path, secondary_path: Path, project: str, basedir: Path,
         shift_y, shift_x = shift * pixel_size
         rows.append(pd.Series({'id': tile.id, 'shift_x': shift_x, 'shift_y': shift_y, 'error': error}))
     base_name = f'{reference_path.stem}_x_{secondary_path.stem}'
+    if len(rows) == 0:
+        print('No valid tiles found. Skipping RLE analysis.')
+        return
     df = pd.DataFrame(rows)
-
     df['shift_x_mdz'] = 0.6745 * np.abs(df['shift_x'] - np.median(df['shift_x'])) / median_abs_deviation(df['shift_x'])
     df['shift_y_mdz'] = 0.6745 * np.abs(df['shift_y'] - np.median(df['shift_y'])) / median_abs_deviation(df['shift_y'])
     df['valid'] = (df['shift_x_mdz'] <= 3.5) & (df['shift_y_mdz'] <= 3.5)

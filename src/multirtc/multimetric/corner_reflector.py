@@ -124,6 +124,10 @@ def add_rdr_image_location(slc, cr_df, search_radius):
         row_guess, col_guess = int(round(row_guess)), int(round(col_guess))
         row_range = (row_guess - search_radius, row_guess + search_radius)
         col_range = (col_guess - search_radius, col_guess + search_radius)
+        if row_range[0] < 0 or row_range[1] >= slc.shape[0] or col_range[0] < 0 or col_range[1] >= slc.shape[1]:
+            no_peak.append(idx)
+            print(f'CR {int(row["ID"])} outside of SLC bounds, skipping.')
+            continue
         data = slc.load_data(row_range, col_range)
         in_db = 10 * np.log10(np.abs(data))
         row_peak, col_peak = np.unravel_index(np.argmax(in_db, axis=None), in_db.shape)
