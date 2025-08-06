@@ -328,7 +328,6 @@ def compute_layover_shadow_mask(
     # flush data to the disk
     geocoded_layover_shadow_mask_raster.close_dataset()
     del geocoded_layover_shadow_mask_raster
-
     return slantrange_layover_shadow_mask_raster
 
 
@@ -380,8 +379,7 @@ def save_intermediate_geocode_files(
     extension,
     dem_raster,
     radar_grid_file_dict,
-    lookside,
-    wavelength,
+    radar_grid,
     orbit,
     doppler=None,
 ):
@@ -421,16 +419,13 @@ def save_intermediate_geocode_files(
         interpolated_dem_raster,
     ) = raster_objs
 
-    # TODO review this (Doppler)!!!
-    # native_doppler = burst.doppler.lut2d
     native_doppler = doppler
     native_doppler.bounds_error = False
     grid_doppler = doppler
     grid_doppler.bounds_error = False
 
     isce3.geogrid.get_radar_grid(
-        lookside,
-        wavelength,
+        radar_grid,
         dem_raster,
         geogrid,
         orbit,
@@ -574,7 +569,6 @@ def rtc(slc, geogrid, opts):
     else:
         raise NotImplementedError('Unsupported radar grid type for geocoding')
 
-
     # init geocode members
     geo_obj.orbit = orbit
     geo_obj.ellipsoid = ellipsoid
@@ -603,8 +597,7 @@ def rtc(slc, geogrid, opts):
         dem_raster=dem_raster,
         output_mode=opts.geocode_algorithm_isce3,
         geogrid_upsampling=opts.geogrid_upsampling,
-        # flag_apply_rtc=opts.apply_rtc,
-        flag_apply_rtc=False,
+        flag_apply_rtc=opts.apply_rtc,
         input_terrain_radiometry=opts.input_terrain_radiometry_isce3,
         output_terrain_radiometry=opts.terrain_radiometry_isce3,
         exponent=exponent,
@@ -646,8 +639,7 @@ def rtc(slc, geogrid, opts):
         raster_extension,
         dem_raster,
         radar_grid_file_dict,
-        lookside,
-        wavelength,
+        radar_grid,
         orbit,
         doppler=doppler,
     )
