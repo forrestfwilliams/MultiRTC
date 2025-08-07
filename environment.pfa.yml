@@ -1,33 +1,60 @@
-name: multirtc
+name: isce3multi
 channels:
   - conda-forge
   - nodefaults
 dependencies:
-  - backoff
+  # Core languages & build tools
+  - python>=3.10
+  - pip
   - cmake>=3.18
   - cxx-compiler
-  - eigen>=3.3
-  - fftw>=3.3
-  # GDAL 3.6.0 was the first to build with cmake, needed for FindGDAL module
-  # https://github.com/conda-forge/gdal-feedstock/pull/651
+  - ninja
+  - setuptools
+  - setuptools_scm
+  - wheel
+  # ISCE3 and related geospatial libraries
   - gdal>=3.6
-  - gmock>=1.10
-  - gtest>=1.10
   - h5py>=3
   - hdf5>=1.10.2,!=1.14.0
   - libgdal-hdf5
   - libgdal-netcdf
-  - ninja
+  - pyproj
+  - shapely>=2
+  - snaphu>=0.4
+  - isce3
+  - s1reader>=0.2.5
+  # Scientific computing
   - numpy>=1.20
+  - scipy!=1.10.0
+  - eigen>=3.3
+  - fftw>=3.3
+  # MultiRTC
+  - burst2safe
+  - matplotlib
+  - pandas
+  - lmfit
+  - scikit-image
+  - hyp3lib
+  - sarpy
+  - netcdf4
+  - patsy
+  - cftime
+  - statsmodels
+  # Utility and I/O
+  - boto3
+  - requests
+  - lxml
+  - tqdm
+  - ruamel.yaml
+  # Pyre & Pybind11
   - pyaps3>=0.3
   - pybind11>=2.5
   - pyre>=1.12.5
   - pysolid>=0.2
+  # Testing
+  - gmock>=1.10
+  - gtest>=1.10
   - pytest
-  - python>=3.8
-  - raider-base>=0.4.5
-  - ruamel.yaml
-  - scipy!=1.10.0
-  - shapely>=2
-  - snaphu>=0.4
-  - yamale
+  - pytest-console-scripts
+  - pytest-cov
+  - ruff
