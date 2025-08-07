@@ -1,4 +1,4 @@
-name: isce3multi
+name: multirtc
 channels:
   - conda-forge
   - nodefaults
