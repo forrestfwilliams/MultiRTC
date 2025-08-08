@@ -45,7 +45,10 @@ RUN cd ./isce3/isce3_build && \
     make install && \
     cd ../..
 
-RUN echo "export ISCE_INSTALL=/home/conda/isce3/isce3_install" >> /home/conda/.bashrc && \
+RUN rm -rf ./isce3/isce3_build && rm -rf ./isce3/isce3_src
+
+RUN export ISCE_INSTALL=/home/conda/isce3/isce3_install && \
+    echo "export ISCE_INSTALL=/home/conda/isce3/isce3_install" >> /home/conda/.bashrc && \
     echo "export PATH=$ISCE_INSTALL/bin:$PATH" >> /home/conda/.bashrc && \
     echo "export PATH=$ISCE_INSTALL/packages/nisar/workflows/:$PATH" >> /home/conda/.bashrc && \
     echo "export PYTHONPATH=$ISCE_INSTALL/packages:$PYTHONPATH" >> /home/conda/.bashrc && \
