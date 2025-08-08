@@ -47,11 +47,9 @@ RUN cd ./isce3/isce3_build && \
 
 RUN rm -rf ./isce3/isce3_build && rm -rf ./isce3/isce3_src
 
-ENV ISCE_INSTALL=/home/conda/isce3/isce3_install \
-    PATH=$ISCE_INSTALL/bin:$ISCE_INSTALL/packages/nisar/workflows:$PATH \
-    PYTHONPATH=$ISCE_INSTALL/packages:$ISCE_INSTALL/lib:$PYTHONPATH \
-    LD_LIBRARY_PATH=$ISCE_INSTALL/lib64:$LD_LIBRARY_PATH \
-    DYLD_LIBRARY_PATH=$ISCE_INSTALL/lib:$DYLD_LIBRARY_PATH \
+ENV PATH=/home/conda/isce3/isce3_install/bin:/home/conda/isce3/isce3_install/packages/nisar/workflows:$PATH \
+    PYTHONPATH=/home/conda/isce3/isce3_install/packages:/home/conda/isce3/isce3_install/lib:$PYTHONPATH \
+    LD_LIBRARY_PATH=/home/conda/isce3/isce3_install/lib:$LD_LIBRARY_PATH \
     GDAL_VRT_ENABLE_PYTHON=YES
 
 ENTRYPOINT ["/home/conda/multirtc/src/multirtc/etc/entrypoint.sh"]
