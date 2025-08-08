@@ -45,16 +45,14 @@ RUN cd ./isce3/isce3_build && \
     make install && \
     cd ../..
 
-# RUN CC=clang CXX=clang++ cmake -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON -DCMAKE_INSTALL_PREFIX=/home/conda/isce3/isce3_install /home/conda/isce3/isce3_src make > make.tx
-# RUN cd ./isce3/isce3_build && make && make install && cd ../..
-#
-# RUN echo "export ISCE_INSTALL=/home/conda/isce3/isce3_install" >> /home/conda/.bashrc && \
-#     echo "export PATH=$ISCE_INSTALL/bin:$PATH" >> /home/conda/.bashrc && \
-#     echo "export PATH=$ISCE_INSTALL/packages/nisar/workflows/:$PATH" >> /home/conda/.bashrc && \
-#     echo "export PYTHONPATH=$ISCE_INSTALL/packages:$PYTHONPATH" >> /home/conda/.bashrc && \
-#     echo "export PYTHONPATH=$ISCE_INSTALL/lib:$PYTHONPATH" >> /home/conda/.bashrc && \
-#     echo "export LD_LIBRARY_PATH=$ISCE_INSTALL/lib64:$LD_LIBRARY_PATH" >> /home/conda/.bashrc && \
-#     echo "export GDAL_VRT_ENABLE_PYTHON=YES" >> /home/conda/.bashrc
+RUN echo "export ISCE_INSTALL=/home/conda/isce3/isce3_install" >> /home/conda/.bashrc && \
+    echo "export PATH=$ISCE_INSTALL/bin:$PATH" >> /home/conda/.bashrc && \
+    echo "export PATH=$ISCE_INSTALL/packages/nisar/workflows/:$PATH" >> /home/conda/.bashrc && \
+    echo "export PYTHONPATH=$ISCE_INSTALL/packages:$PYTHONPATH" >> /home/conda/.bashrc && \
+    echo "export PYTHONPATH=$ISCE_INSTALL/lib:$PYTHONPATH" >> /home/conda/.bashrc && \
+    echo "export LD_LIBRARY_PATH=$ISCE_INSTALL/lib64:$LD_LIBRARY_PATH" >> /home/conda/.bashrc && \
+    echo "export DYLD_LIBRARY_PATH=$ISCE_INSTALL/lib:$DYLD_LIBRARY_PATH" >> /home/conda/.bashrc && \
+    echo "export GDAL_VRT_ENABLE_PYTHON=YES" >> /home/conda/.bashrc
 
-# ENTRYPOINT ["/hyp3-isce2/src/hyp3_isce2/etc/entrypoint.sh"]
-CMD ["/bin/bash"]
+ENTRYPOINT ["/home/conda/multirtc/src/multirtc/etc/entrypoint.sh"]
+CMD ["-h"]
