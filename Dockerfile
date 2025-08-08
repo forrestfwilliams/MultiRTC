@@ -32,13 +32,13 @@ RUN mkdir -p ./isce3/isce3_build && \
 
 COPY --chown=${CONDA_UID}:${CONDA_GID} . ./multirtc/
 
-# RUN mamba env create -f ./multirtc/environment.pfa.yml && \
-#     conda clean -afy && \
-#     conda activate multirtc && \
-#     sed -i 's/conda activate base/conda activate multirtc/g' /home/conda/.profile && \
-#     python -m pip install --no-cache-dir ./multirtc && \
-#     conda remove --force -y isce3
-#
+RUN mamba env create -f ./multirtc/environment.pfa.yml && \
+    conda clean -afy && \
+    conda activate multirtc && \
+    sed -i 's/conda activate base/conda activate multirtc/g' /home/conda/.profile && \
+    python -m pip install --no-cache-dir ./multirtc && \
+    conda remove --force -y isce3
+
 # RUN CC=clang CXX=clang++ cmake -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON -DCMAKE_INSTALL_PREFIX=/home/conda/isce3/isce3_install /home/conda/isce3/isce3_src make > make.tx
 # RUN cd ./isce3/isce3_build && make && make install && cd ../..
 #

@@ -3,31 +3,40 @@ channels:
   - conda-forge
   - nodefaults
 dependencies:
-  # Core languages & build tools
-  - python>=3.10
-  - pip
-  - cmake>=3.18
+  # ISCE3
+  - cmake
   - cxx-compiler
-  - ninja
-  - setuptools
-  - setuptools_scm
-  - wheel
-  # ISCE3 and related geospatial libraries
-  - gdal>=3.6
-  - h5py>=3
-  - hdf5>=1.10.2,!=1.14.0
+  - eigen
+  - fftw
+  - gdal
+  - emacs
+  - gmock
+  - gtest
+  - gcc_linux-64 < 10
+  - gxx_linux-64 < 10
+  - gfortran_linux-64
+  - gfortran
+  - h5py
+  - hdf5!=1.14.2
+  - libgcc-ng
+  - libstdcxx-ng
+  - numpy<1.26.0
+  - pybind11
+  - pyre
+  - pytest
+  - cython
+  - ruamel.yaml
+  - scipy=1.9
+  - shapely
+  - yamale
+  - backoff
+  - pyaps3
+  - xarray
+  - pysolid
+  - matplotlib
+  - scipy
   - libgdal-hdf5
-  - libgdal-netcdf
-  - pyproj
-  - shapely>=2
-  - snaphu>=0.4
-  - isce3
-  - s1reader>=0.2.5
-  # Scientific computing
-  - numpy>=1.20
-  - scipy!=1.10.0
-  - eigen>=3.3
-  - fftw>=3.3
+  - libnetcdf
   # MultiRTC
   - burst2safe
   - matplotlib
@@ -40,20 +49,11 @@ dependencies:
   - patsy
   - cftime
   - statsmodels
-  # Utility and I/O
   - boto3
   - requests
   - lxml
   - tqdm
   - ruamel.yaml
-  # Pyre & Pybind11
-  - pyaps3>=0.3
-  - pybind11>=2.5
-  - pyre>=1.12.5
-  - pysolid>=0.2
-  # Testing
-  - gmock>=1.10
-  - gtest>=1.10
   - pytest
   - pytest-console-scripts
   - pytest-cov
