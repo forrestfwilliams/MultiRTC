@@ -26,7 +26,7 @@ RUN mkdir -p ./isce3/isce3_build && \
 COPY --chown=${CONDA_UID}:${CONDA_GID} . ./multirtc/
 
 RUN mamba env create -f ./multirtc/environment.isce3.yml && \
-    conda activate isce3dev && \
+    conda activate isce3build && \
     cd ./isce3/isce3_build && \
     cmake -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON -DCMAKE_INSTALL_PREFIX=/home/conda/isce3/isce3_install /home/conda/isce3/isce3_src && \
     make -j"$(nproc)" && \

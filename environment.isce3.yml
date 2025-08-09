@@ -4,12 +4,13 @@ channels:
   - nodefaults
 dependencies:
   # build
-  - python
-  - numpy
-  - pybind11
   - cxx-compiler
+  - make
   - cmake>=3.23
   - ninja
+  - pybind11
+  - python
+  - numpy
   # host
   - eigen
   - fftw
@@ -21,8 +22,7 @@ dependencies:
   - libgdal-hdf5
   - libgdal-netcdf
   - numpy
-  - pybind11
-  - python
+  - pysold
   - pyre>=1.12.1,<=1.13.0
   # needed for ctests in build.sh
   - h5py
