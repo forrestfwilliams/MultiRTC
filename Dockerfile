@@ -1,4 +1,39 @@
-FROM condaforge/mambaforge:latest
+FROM condaforge/mambaforge:latest as builder
+
+ARG DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=true
+
+RUN apt-get update && apt-get install -y --no-install-recommends unzip vim && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+ARG CONDA_UID=1000
+ARG CONDA_GID=1000
+
+RUN groupadd -g "${CONDA_GID}" --system conda && \
+    useradd -l -u "${CONDA_UID}" -g "${CONDA_GID}" --system -d /home/conda -m  -s /bin/bash conda && \
+    chown -R conda:conda /opt && \
+    echo ". /opt/conda/etc/profile.d/conda.sh" >> /home/conda/.profile && \
+    echo "conda activate base" >> /home/conda/.profile
+
+USER ${CONDA_UID}
+SHELL ["/bin/bash", "-l", "-c"]
+WORKDIR /home/conda/
+
+RUN mkdir -p ./isce3/isce3_build && \
+    mkdir -p ./isce3/isce3_install && \
+    git clone --branch pfa https://github.com/forrestfwilliams/isce3.git ./isce3/isce3_src
+
+COPY --chown=${CONDA_UID}:${CONDA_GID} . ./multirtc/
+
+RUN mamba env create -f ./multirtc/environment.isce3.yml && \
+    conda activate isce3dev && \
+    cd ./isce3/isce3_build && \
+    cmake -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON -DCMAKE_INSTALL_PREFIX=/home/conda/isce3/isce3_install /home/conda/isce3/isce3_src && \
+    make -j"$(nproc)" && \
+    make install && \
+    cd ../..
+
+FROM condaforge/mambaforge:latest as runner
 
 # For opencontainers label definitions, see:
 #    https://github.com/opencontainers/image-spec/blob/master/annotations.md
@@ -26,26 +61,18 @@ USER ${CONDA_UID}
 SHELL ["/bin/bash", "-l", "-c"]
 WORKDIR /home/conda/
 
-RUN mkdir -p ./isce3/isce3_build && \
-    mkdir -p ./isce3/isce3_install && \
-    git clone --branch pfa https://github.com/forrestfwilliams/isce3.git ./isce3/isce3_src
-
 COPY --chown=${CONDA_UID}:${CONDA_GID} . ./multirtc/
 
-RUN mamba env create -f ./multirtc/environment.pfa.yml && \
+RUN mamba env create -f ./multirtc/environment.yml && \
     conda clean -afy && \
     conda activate multirtc && \
     sed -i 's/conda activate base/conda activate multirtc/g' /home/conda/.profile && \
     python -m pip install --no-cache-dir ./multirtc && \
     conda remove --force -y isce3
 
-RUN cd ./isce3/isce3_build && \
-    cmake -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON -DCMAKE_INSTALL_PREFIX=/home/conda/isce3/isce3_install /home/conda/isce3/isce3_src && \
-    make -j"$(nproc)" && \
-    make install && \
-    cd ../..
+RUN mkdir -p ./isce3/isce3_install
 
-RUN rm -rf ./isce3/isce3_build && rm -rf ./isce3/isce3_src
+COPY --chown=${CONDA_UID}:${CONDA_GID} --from=builder /home/conda/isce3/isce3_install /home/conda/isce3/isce3_install
 
 ENV PATH=/home/conda/isce3/isce3_install/bin:/home/conda/isce3/isce3_install/packages/nisar/workflows:$PATH \
     PYTHONPATH=/home/conda/isce3/isce3_install/packages:/home/conda/isce3/isce3_install/lib:$PYTHONPATH \
