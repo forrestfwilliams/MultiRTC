@@ -1,0 +1,33 @@
+name: isce3build
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  # build
+  - python
+  - numpy
+  - pybind11
+  - cxx-compiler
+  - cmake>=3.23
+  - ninja
+  # host
+  - eigen
+  - fftw
+  - gdal
+  - gmock
+  - gtest
+  - hdf5
+  - libgdal-core
+  - libgdal-hdf5
+  - libgdal-netcdf
+  - numpy
+  - pybind11
+  - python
+  - pyre>=1.12.1,<=1.13.0
+  # needed for ctests in build.sh
+  - h5py
+  - pytest
+  - ruamel.yaml
+  - scipy
+  - shapely
+  - yamale
