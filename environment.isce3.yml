@@ -22,7 +22,7 @@ dependencies:
   - libgdal-hdf5
   - libgdal-netcdf
   - numpy
-  - pysold
+  - pysolid
   - pyre>=1.12.1,<=1.13.0
   # needed for ctests in build.sh
   - h5py
