@@ -85,7 +85,10 @@ def run_multirtc(platform: str, granule: str, resolution: int, work_dir: Path) -
         )
         rtc(slc, geogrid, opts)
     else:
-        pfa_prototype_geocode(slc, geogrid, dem_path, output_dir)
+        raise NotImplementedError(
+            'RTC creation is not supported for this input. For polar grid support, use the multirtc docker image:\n'
+            'https://github.com/forrestfwilliams/MultiRTC/pkgs/container/multirtc'
+        )
 
 
 def create_parser(parser):

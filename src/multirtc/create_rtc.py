@@ -2,6 +2,7 @@ import itertools
 import logging
 import os
 import time
+from pathlib import Path
 
 import isce3
 import numpy as np
@@ -143,7 +144,8 @@ def compute_correction_lut(
     rg_lut = isce3.core.LUT2d(
         bistatic_delay.x_start, bistatic_delay.y_start, bistatic_delay.x_spacing, bistatic_delay.y_spacing, tropo
     )
-
+    [x.unlink() for x in Path(scratch_path).glob('*.hdr') if x.is_file()]
+    [x.unlink() for x in Path(scratch_path).glob('*.rdr') if x.is_file()]
     return rg_lut, az_lut
 
 
