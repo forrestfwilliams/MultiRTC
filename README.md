@@ -82,6 +82,10 @@ More information on the metadata images can be found in the OPERA RTC Static Pro
 Currently, only the OPERA DEM is supported. This is a global Height Above Ellipsoid DEM sourced from the [COP-30 DEM](https://portal.opentopography.org/raster?opentopoID=OTSDEM.032021.4326.3). In the future, we hope to support a wider variety of automatically retrieved and user provided DEMs.
 
 ## Calibration & Validation Subcommands
+
+> [!WARNING]
+> This submodule currently only support Umbra SICD data! Reach out if you would like to see this submodule expanded to other datasets.
+
 MultiRTC includes three calibration and validation (cal/val) subcommands for assessing the geometric and radiometric quality of SAR products. These tools are useful for analyzing geolocation, co-registration, and impulse response performance.
 
 ### `ale` Absolute Location Error
