@@ -8,18 +8,33 @@ A python library for creating ISCE3-based RTCs for multiple SAR data sources
 > [!IMPORTANT]
 > All credit for this library's RTC algorithm goes to Gustavo Shiroma and the JPL [OPERA](https://www.jpl.nasa.gov/go/opera/about-opera/) and [ISCE3](https://github.com/isce-framework/isce3) teams. This package merely allows others to use their algorithm with a wider set of SAR data sources. The RTC algorithm utilized by this package is described in [Shiroma et al., 2023](https://doi.org/10.1109/TGRS.2022.3147472).
 
-## Usage
+## Dataset Support
 MultiRTC allows users to create RTC products from SLC data for multiple SAR sensor platforms, and provides utilities for assessing the resulting products. All utilities can be accessed via CLI pattern `multirtc SUBCOMMAND ARGS`, with the primary subcommand `multirtc rtc`.
 
-Currently the list of supported datasets includes:
+Below is a list of relevant SAR data sources and their support status:
 
-Full RTC:
-- [Sentinel-1 Burst SLCs](https://www.earthdata.nasa.gov/data/catalog/alaska-satellite-facility-distributed-active-archive-center-sentinel-1-bursts-version)
-- [Capella SICD SLCs](https://www.capellaspace.com/earth-observation/data)
-- [ICEYE SICD SLCs](https://sar.iceye.com/5.0/productFormats/slc/)
+| Mission    | File Format | Image Mode        | Image Grid Type | Status      |
+|------------|-------------|-------------------------------------|-------------|
+| Sentinel-1 | SAFE        | Burst IW          | Range Doppler   | Supported   |
+| Sentinel-1 | SAFE        | Full-frame IW     | Range Doppler   | Unsupported |
+| Sentinel-1 | SAFE        | Burst EW          | Range Doppler   | Unsupported |
+| Sentinel-1 | SAFE        | Full-frame EW     | Range Doppler   | Unsupported |
+| Capella    | SICD        | Spotlight         | Polar           | Unsupported |
+| Capella    | SICD        | Sliding Spotlight | Range Doppler   | Supported   |
+| Capella    | SICD        | Stripmap          | Range Doppler   | Supported   | 
+| Iceye      | SICD        | Dwell             | Range Doppler   | Supported   | 
+| Iceye      | SICD        | Spotlight         | Range Doppler   | Supported   | 
+| Iceye      | SICD        | Sliding Spotlight | Range Doppler   | Supported   |
+| Iceye      | SICD        | Stripmap          | Range Doppler   | Supported   |
+| Iceye      | SICD        | Scan              | Range Doppler   | Supported   |
+| Umbra      | SICD        | Dwell             | Polar           | Supported^* |
+| Umbra      | SICD        | Spotlight         | Polar           | Supported^* |
 
-Geocode Only:
-- [UMBRA SICD SLCs](https://help.umbra.space/product-guide/umbra-products/umbra-product-specifications)
+I have done my best to accurately reflect the support status of each SAR image type, but please let me know if I have made any mistakes. Note that some commercial datasets used to use polar instead of range doppler image grids for specific images modes. This table is based on the image grid types currently being used.
+
+^*Polar image grid support is implemented via the [approach detailed by Piyush Agram](https://arxiv.org/abs/2503.07889v1) in his recent technical note. I have implemented his method in a fork of the main ISCE3 repo, which you can view [here](https://github.com/forrestfwilliams/isce3/tree/pfa). The long-term plan is to merge this into the main ISCE3 repo but until that is complete, polar grid support is only available via this project's `pfa`-suffixed docker containers. See the running via docker section for more details.
+
+## Usage
 
 To create an RTC, use the `multirtc` CLI entrypoint using the following pattern:
 
@@ -30,8 +45,24 @@ Where `PLATFORM` is the name of the satellite platform (currently `S1`, `CAPELLA
 
 Output RTC pixel values represent gamma0 power.
 
-### Current Umbra Implementation
-Currently, the Umbra processor only supports basic geocoding and not full RTC processing. ISCE3's RTC algorithm is only designed to work with Range Migration Algorithm (RMA) focused SLC products, but Umbra creates their data using the Polar Format Algorithm (PFA). Using an [approach detailed by Piyush Agram](https://arxiv.org/abs/2503.07889v1) to adapt RMA approaches to the PFA image geometry, we have developed a workflow to geocode an Umbra SLC but there is more work to be done to implement full RTC processing. Since full RTC is not yet implemented, Umbra geocoded pixel values represent sigma0 power.
+### Running via Docker
+In addition to the main python interface, I've also provided an experimental docker container that contains full support for polar grid format SICD data. Encapsulating this functionality in a docker container is ncessary for now because it requires re-compiling a development version of ISCE3. The docker container can be run using a similar interface, with exception of needing to pass your EarthData credentials and the need to pass a mounted volume with an `input` and `output` directory inside:
+
+```bash
+docker run -it --rm \
+    -e EARTHDATA_USERNAME=[YOUR_USERNAME_HERE] \
+    -e EARTHDATA_PASSWORD=[YOUR_PASSWORD_HERE] \
+    -v ~/local_path/project1:/home/conda/project1 \
+    ghcr.io/forrestfwilliams/multirtc:0.4.0.pfa \
+    rtc PLATFORM SLC-GRANULE --resolution RESOLUTION
+```
+The local `project1` directory can be a name of your choosing and should have the structure:
+```
+project1/
+    |--input/
+        |--input.slc (if needed)
+    |--output/
+```
 
 ### DEM options
 Currently, only the OPERA DEM is supported. This is a global Height Above Ellipsoid DEM sourced from the [COP-30 DEM](https://portal.opentopography.org/raster?opentopoID=OTSDEM.032021.4326.3). In the future, we hope to support a wider variety of automatically retrieved and user provided DEMs.
