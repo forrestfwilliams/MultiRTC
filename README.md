@@ -53,7 +53,7 @@ docker run -it --rm \
     -e EARTHDATA_USERNAME=[YOUR_USERNAME_HERE] \
     -e EARTHDATA_PASSWORD=[YOUR_PASSWORD_HERE] \
     -v ~/LOCAL_PATH/PROJECT:/home/conda/PROJECT \
-    ghcr.io/forrestfwilliams/multirtc:0.4.0.pfa \
+    ghcr.io/forrestfwilliams/multirtc:VERSION.pfa \
     rtc PLATFORM SLC-GRANULE --resolution RESOLUTION --work-dir PROJECT
 ```
 The local `project1` directory can be a name of your choosing and should have the structure:
