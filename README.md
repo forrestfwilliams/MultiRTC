@@ -14,7 +14,7 @@ MultiRTC allows users to create RTC products from SLC data for multiple SAR sens
 Below is a list of relevant SAR data sources and their support status:
 
 | Mission    | File Format | Image Mode        | Image Grid Type | Status        |
-|------------|-------------|-------------------------------------|---------------|
+|------------|-------------|-------------------|-----------------|---------------|
 | Sentinel-1 | SAFE        | Burst IW          | Range Doppler   | Supported     |
 | Sentinel-1 | SAFE        | Full-frame IW     | Range Doppler   | Unsupported   |
 | Sentinel-1 | SAFE        | Burst EW          | Range Doppler   | Unsupported   |
