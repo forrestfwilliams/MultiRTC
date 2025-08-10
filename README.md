@@ -13,26 +13,26 @@ MultiRTC allows users to create RTC products from SLC data for multiple SAR sens
 
 Below is a list of relevant SAR data sources and their support status:
 
-| Mission    | File Format | Image Mode        | Image Grid Type | Status      |
-|------------|-------------|-------------------------------------|-------------|
-| Sentinel-1 | SAFE        | Burst IW          | Range Doppler   | Supported   |
-| Sentinel-1 | SAFE        | Full-frame IW     | Range Doppler   | Unsupported |
-| Sentinel-1 | SAFE        | Burst EW          | Range Doppler   | Unsupported |
-| Sentinel-1 | SAFE        | Full-frame EW     | Range Doppler   | Unsupported |
-| Capella    | SICD        | Spotlight         | Polar           | Unsupported |
-| Capella    | SICD        | Sliding Spotlight | Range Doppler   | Supported   |
-| Capella    | SICD        | Stripmap          | Range Doppler   | Supported   | 
-| Iceye      | SICD        | Dwell             | Range Doppler   | Supported   | 
-| Iceye      | SICD        | Spotlight         | Range Doppler   | Supported   | 
-| Iceye      | SICD        | Sliding Spotlight | Range Doppler   | Supported   |
-| Iceye      | SICD        | Stripmap          | Range Doppler   | Supported   |
-| Iceye      | SICD        | Scan              | Range Doppler   | Supported   |
-| Umbra      | SICD        | Dwell             | Polar           | Supported^* |
-| Umbra      | SICD        | Spotlight         | Polar           | Supported^* |
+| Mission    | File Format | Image Mode        | Image Grid Type | Status        |
+|------------|-------------|-------------------------------------|---------------|
+| Sentinel-1 | SAFE        | Burst IW          | Range Doppler   | Supported     |
+| Sentinel-1 | SAFE        | Full-frame IW     | Range Doppler   | Unsupported   |
+| Sentinel-1 | SAFE        | Burst EW          | Range Doppler   | Unsupported   |
+| Sentinel-1 | SAFE        | Full-frame EW     | Range Doppler   | Unsupported   |
+| Capella    | SICD        | Spotlight         | Polar           | Supported(\*) |
+| Capella    | SICD        | Sliding Spotlight | Range Doppler   | Supported     |
+| Capella    | SICD        | Stripmap          | Range Doppler   | Supported     | 
+| Iceye      | SICD        | Dwell             | Range Doppler   | Supported     | 
+| Iceye      | SICD        | Spotlight         | Range Doppler   | Supported     | 
+| Iceye      | SICD        | Sliding Spotlight | Range Doppler   | Supported     |
+| Iceye      | SICD        | Stripmap          | Range Doppler   | Supported     |
+| Iceye      | SICD        | Scan              | Range Doppler   | Supported     |
+| Umbra      | SICD        | Dwell             | Polar           | Supported(\*) |
+| Umbra      | SICD        | Spotlight         | Polar           | Supported(\*) |
 
 I have done my best to accurately reflect the support status of each SAR image type, but please let me know if I have made any mistakes. Note that some commercial datasets used to use polar instead of range doppler image grids for specific images modes. This table is based on the image grid types currently being used.
 
-^*Polar image grid support is implemented via the [approach detailed by Piyush Agram](https://arxiv.org/abs/2503.07889v1) in his recent technical note. I have implemented his method in a fork of the main ISCE3 repo, which you can view [here](https://github.com/forrestfwilliams/isce3/tree/pfa). The long-term plan is to merge this into the main ISCE3 repo but until that is complete, polar grid support is only available via this project's `pfa`-suffixed docker containers. See the running via docker section for more details.
+(*) Polar image grid support is implemented via the [approach detailed by Piyush Agram](https://arxiv.org/abs/2503.07889v1) in his recent technical note. I have implemented his method in a fork of the main ISCE3 repo, which you can view [here](https://github.com/forrestfwilliams/isce3/tree/pfa). The long-term plan is to merge this into the main ISCE3 repo but until that is complete, polar grid support is only available via this project's `pfa`-suffixed docker containers. See the running via docker section for more details.
 
 ## Usage
 
