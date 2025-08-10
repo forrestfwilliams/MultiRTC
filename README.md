@@ -66,17 +66,15 @@ PROJECT/
 If you're encountering `permission denied` errors when running the container, make sure other users are allowed to read/write to your project directory (`chmod -R a+rwX ~/LOCAL_PATH/PROJECT`).
 
 ### Output Layers
-MultiRTC outputs one main RTC image and nine metadata images as GeoTIFFs. All layers follow the naming schema `{FILEID}_{DATASET}.tif`, with the main RTC image omiting the `_{DATASET}` component. The layers are as follows
+MultiRTC outputs one main RTC image and seven metadata images as GeoTIFFs. All layers follow the naming schema `{FILEID}_{DATASET}.tif`, with the main RTC image omiting the `_{DATASET}` component. The layers are as follows
 `FILEID.tif`: The radiometric and terrain corrected backscatter data in gamma0 radiometry.
 `FILEID_incidence_angle.tif`: The angle between the LOS vector and the ellipsoid normal at the target.
 `FILEID_interpolated_dem.tif`: The DEM used of calculating layover/shadow.
-`FILEID_local_incidence_angle.tif`: The angle between LOS vector and terrain normal vector at the target.
+`FILEID_local_incidence_angle.tif`: The angle between the LOS vector and terrain normal vector at the target.
 `FILEID_mask.tif`: The layover/shadow mask. `0` is no shadow or shadow, `1` is shadow, `2` is layover and `3` is layover and shadow.
 `FILEID_number_of_looks.tif`: The number of radar samples used to compute each output image pixel.
-`FILEID_projection_angle.tif`: TODO.
 `FILEID_rtc_anf_gamma0_to_beta0.tif`: The conversion values needed to normalize the gamma0 backscatter to beta0.
 `FILEID_rtc_anf_gamma0_to_sigma0.tif`: The conversion values needed to normalize the gamma0 backscatter to sigma0.
-`FILEID_rtc_anf_projection_angle.tif`: TODO.
 
 More information on the metadata images can be found in the OPERA RTC Static Product guide on the [OPERA RTC Product website](https://www.jpl.nasa.gov/go/opera/products/rtc-product/).
 

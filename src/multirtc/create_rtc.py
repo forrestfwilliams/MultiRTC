@@ -388,10 +388,10 @@ def save_intermediate_geocode_files(
     names = [
         LAYER_NAME_LOCAL_INCIDENCE_ANGLE,
         LAYER_NAME_INCIDENCE_ANGLE,
-        LAYER_NAME_PROJECTION_ANGLE,
-        LAYER_NAME_RTC_ANF_PROJECTION_ANGLE,
-        # LAYER_NAME_RANGE_SLOPE, # FIXME
         LAYER_NAME_DEM,
+        # LAYER_NAME_PROJECTION_ANGLE,
+        # LAYER_NAME_RTC_ANF_PROJECTION_ANGLE,
+        # LAYER_NAME_RANGE_SLOPE, # FIXME
     ]
     raster_objs = []
     for name in names:
@@ -408,10 +408,10 @@ def save_intermediate_geocode_files(
     (
         local_incidence_angle_raster,
         incidence_angle_raster,
-        projection_angle_raster,
-        rtc_anf_projection_angle_raster,
-        # range_slope_raster, # FIXME
         interpolated_dem_raster,
+        # projection_angle_raster,
+        # rtc_anf_projection_angle_raster,
+        # range_slope_raster, # FIXME
     ) = raster_objs
 
     # TODO review this (Doppler)!!!
@@ -432,9 +432,9 @@ def save_intermediate_geocode_files(
         dem_interp_method_enum,
         incidence_angle_raster=incidence_angle_raster,
         local_incidence_angle_raster=local_incidence_angle_raster,
-        projection_angle_raster=projection_angle_raster,
-        simulated_radar_brightness_raster=rtc_anf_projection_angle_raster,
         interpolated_dem_raster=interpolated_dem_raster,
+        # projection_angle_raster=projection_angle_raster,
+        # simulated_radar_brightness_raster=rtc_anf_projection_angle_raster,
         # range_slope_angle_raster=range_slope_raster, # FIXME
     )
     for obj in output_obj_list:
