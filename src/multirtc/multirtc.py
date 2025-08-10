@@ -8,7 +8,7 @@ from s1reader.s1_orbit import retrieve_orbit_file
 
 from multirtc import dem
 from multirtc.base import Slc
-from multirtc.create_rtc import pfa_prototype_geocode, rtc
+from multirtc.create_rtc import rtc
 from multirtc.rtc_options import RtcOptions
 from multirtc.sentinel1 import S1BurstSlc
 from multirtc.sicd import SicdPfaSlc, SicdRzdSlc
@@ -85,7 +85,10 @@ def run_multirtc(platform: str, granule: str, resolution: int, work_dir: Path) -
         )
         rtc(slc, geogrid, opts)
     else:
-        pfa_prototype_geocode(slc, geogrid, dem_path, output_dir)
+        raise NotImplementedError(
+            'RTC creation is not supported for this input. For polar grid support, use the multirtc docker image:\n'
+            'https://github.com/forrestfwilliams/MultiRTC/pkgs/container/multirtc'
+        )
 
 
 def create_parser(parser):
