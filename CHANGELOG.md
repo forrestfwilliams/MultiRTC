@@ -15,6 +15,9 @@ and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 * Output of area projection metadata.
 * Prototype polar grid support in favor of full support via the new docker image.
 
+### Fixed
+* Plotting issues with the cal/val submodule.
+
 ## [0.4.0]
 
 ### Changed
