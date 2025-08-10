@@ -8,7 +8,7 @@ from s1reader.s1_orbit import retrieve_orbit_file
 
 from multirtc import dem
 from multirtc.base import Slc
-from multirtc.create_rtc import pfa_prototype_geocode, rtc
+from multirtc.create_rtc import rtc
 from multirtc.rtc_options import RtcOptions
 from multirtc.sentinel1 import S1BurstSlc
 from multirtc.sicd import SicdPfaSlc, SicdRzdSlc
