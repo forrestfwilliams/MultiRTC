@@ -1,6 +1,5 @@
 """Point target (resolution, PSLR, and ISLR) analysis"""
 
-from argparse import ArgumentParser
 from pathlib import Path
 
 import matplotlib.pyplot as plt
