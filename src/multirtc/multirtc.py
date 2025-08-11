@@ -105,19 +105,3 @@ def run(args):
     if args.work_dir is None:
         args.work_dir = Path.cwd()
     run_multirtc(args.platform, args.granule, args.resolution, args.work_dir, apply_rtc=True)
-
-
-def main():
-    """Create a RTC dataset for a multiple satellite platforms
-
-    Example command:
-    multirtc rtc UMBRA umbra_image.ntif --resolution 40
-    """
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser = create_parser(parser)
-    args = parser.parse_args()
-    run(args)
-
-
-if __name__ == '__main__':
-    main()

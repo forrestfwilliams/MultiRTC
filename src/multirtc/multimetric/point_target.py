@@ -111,14 +111,3 @@ def run(args):
     assert args.filepath.exists()
     args.basedir = Path(args.basedir).expanduser()
     analyze_point_targets(args.platform, args.filepath, args.project, basedir=args.basedir)
-
-
-def main():
-    parser = ArgumentParser(description='Point target (resolution, PSLR, and ISLR) analysis')
-    parser = create_parser(parser)
-    args = parser.parse_args()
-    run(args)
-
-
-if __name__ == '__main__':
-    main()
