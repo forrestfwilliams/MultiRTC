@@ -60,53 +60,6 @@ def get_slc(platform: str, granule: str, input_dir: Path) -> Slc:
     return slc
 
 
-def test_polar(slc, dem_path):
-    import isce3
-    import numpy as np
-    import shapely
-
-    ellipsoid = isce3.core.Ellipsoid()
-    dem_raster = isce3.io.Raster(str(dem_path))
-    dem = isce3.geometry.DEMInterpolator()
-    dem.load_dem(dem_raster)
-    lonlats = [
-        (-118.06044897206164, 34.83087820026278),  # Upper right (min, min) good
-        (-118.06363759207152, 34.770770454747954),  # Lower right (max, min)
-        (-118.12953340810137, 34.76711089289639),  # Lower left
-        (-118.12639277339771, 34.827220388640804),  # Upper left
-    ]
-    box = shapely.box(*shapely.geometry.MultiPoint(lonlats).bounds)
-    print(f'Box: {box.wkt}')
-    for point in lonlats:
-        hae = dem.interpolate_lonlat(np.deg2rad(point[0]), np.deg2rad(point[1]))
-        geo_in = np.array([np.deg2rad(point[0]), np.deg2rad(point[1]), hae])
-        rdr = isce3.geometry.geo2rdr(geo_in, ellipsoid, slc.orbit, slc.doppler_centroid_grid, slc.radar_grid)
-        geo = isce3.geometry.rdr2geo(
-            rdr[0], rdr[1], slc.doppler_centroid_grid, slc.orbit, ellipsoid, dem, slc.radar_grid
-        )
-        if not np.allclose(geo_in, geo):
-            raise ValueError(f'Mismatch in geo->rdr->geo conversion for point {point}')
-    print('geo->rdr->geo pass')
-
-    rowcols = [
-        (0, 0),
-        (slc.radar_grid.length - 1, 0),
-        (0, slc.radar_grid.width),  # doesn't converge if - 1
-        (slc.radar_grid.length - 1, slc.radar_grid.width - 1),
-    ]
-    for point in rowcols:
-        az = (point[0] * slc.radar_grid.azimuth_pixel_spacing) + slc.radar_grid.azimuth_start
-        rg = (point[1] * slc.radar_grid.range_pixel_spacing) + slc.radar_grid.range_start
-        rdr_in = (az, rg)
-        geo = isce3.geometry.rdr2geo(
-            rdr_in[0], rdr_in[1], slc.doppler_centroid_grid, slc.orbit, ellipsoid, dem, slc.radar_grid
-        )
-        rdr = isce3.geometry.geo2rdr(geo, ellipsoid, slc.orbit, slc.doppler_centroid_grid, slc.radar_grid)
-        if not np.allclose(rdr_in, rdr):
-            raise ValueError('Mismatch in rdr->geo->rdr conversion')
-    print('rdr->geo->rdr pass')
-
-
 def run_multirtc(platform: str, granule: str, resolution: int, work_dir: Path, apply_rtc=True) -> None:
     """Create an RTC or Geocoded dataset using the OPERA algorithm.
 
