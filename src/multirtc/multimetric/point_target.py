@@ -1,6 +1,5 @@
 """Point target (resolution, PSLR, and ISLR) analysis"""
 
-from argparse import ArgumentParser
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -39,8 +38,8 @@ def plot_profile(ax, n, magnitude, phase, title=None):
 def analyze_point_targets(platform, filepath, project, basedir, width=64):
     outdir = Path(basedir).expanduser() / project
     outdir.mkdir(exist_ok=True, parents=True)
-    slc = get_slc('UMBRA', filepath.name, filepath.parent.expanduser())
-    cr_df = corner_reflector.get_cr_df(box(*slc.footprint.bounds), 4326, slc.reference_time, slc.look_angle, outdir)
+    slc = get_slc(platform, filepath.name, filepath.parent.expanduser())
+    cr_df = corner_reflector.get_cr_df(box(*slc.footprint.bounds), slc.reference_time, slc.look_angle, outdir)
     cr_df = corner_reflector.add_rdr_image_location(slc, cr_df, search_radius=50)
     blank = [np.nan] * cr_df.shape[0]
     cr_df = cr_df.assign(az_res=blank, az_pslr=blank, az_islr=blank, rng_res=blank, rng_pslr=blank, rng_islr=blank)
@@ -88,6 +87,7 @@ def analyze_point_targets(platform, filepath, project, basedir, width=64):
         plt.tight_layout()
         name_base = f'{project}_CR_{int(row["ID"])}'
         figure.savefig(outdir / f'{name_base}_point_target.png', dpi=300)
+        plt.close(figure)
 
     cr_df['az_res'] = cr_df['az_res'] * slc.source.Grid.Row.SS
     cr_df['rng_res'] = cr_df['rng_res'] * slc.source.Grid.Col.SS
@@ -110,14 +110,3 @@ def run(args):
     assert args.filepath.exists()
     args.basedir = Path(args.basedir).expanduser()
     analyze_point_targets(args.platform, args.filepath, args.project, basedir=args.basedir)
-
-
-def main():
-    parser = ArgumentParser(description='Point target (resolution, PSLR, and ISLR) analysis')
-    parser = create_parser(parser)
-    args = parser.parse_args()
-    run(args)
-
-
-if __name__ == '__main__':
-    main()

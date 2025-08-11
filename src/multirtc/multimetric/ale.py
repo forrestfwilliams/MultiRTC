@@ -1,6 +1,5 @@
 """Absolute Location Error (ALE) analysis"""
 
-from argparse import ArgumentParser
 from datetime import datetime
 from pathlib import Path
 
@@ -15,6 +14,10 @@ from multirtc.multimetric import corner_reflector
 
 
 gdal.UseExceptions()
+
+
+def db(data):
+    return 10 * np.log10(data)
 
 
 def gaussfit(x, y, A, x0, y0, sigma_x, sigma_y, theta):
@@ -52,7 +55,10 @@ def plot_crs_on_image(cr_df, data, project, outdir):
     max_y = cr_df['yloc'].max() + buffer
 
     fig, ax = plt.subplots(figsize=(15, 7))
-    ax.imshow(data, cmap='gray', interpolation='bilinear', vmin=0.3, vmax=1.7, origin='upper')
+    data_db = db(data)
+    vmin = np.nanpercentile(data_db, 2)
+    vmax = np.nanpercentile(data_db, 98)
+    ax.imshow(data_db, cmap='gray', interpolation='bilinear', vmin=vmin, vmax=vmax, origin='upper')
     ax.set_xlim(min_x, max_x)
     ax.set_ylim(min_y, max_y)
     ax.axis('off')
@@ -130,7 +136,7 @@ def calculate_ale_for_cr(point, data, project, outdir, search_window=100, oversa
 
     plt.rcParams.update({'font.size': 14})
     fig, ax = plt.subplots(1, 3, figsize=(15, 7))
-    ax[0].imshow(centered_data, cmap='gray', interpolation=None, origin='upper')
+    ax[0].imshow(db(centered_data), cmap='gray', interpolation=None, origin='upper')
     ax[0].plot(xpeak_centered, ypeak_centered, 'r+', label='Return Peak')
     ax[0].plot(xreal_centered, yreal_centered, 'b+', label='CR Location')
     ax[0].legend()
@@ -144,7 +150,7 @@ def calculate_ale_for_cr(point, data, project, outdir, search_window=100, oversa
     ax[2].set_title(f'Gaussian Fit Corner Reflector (ID {int(point["ID"])})')
     [axi.axis('off') for axi in ax]
     fig.tight_layout()
-    fig.savefig(outdir / f'{project}_CR_{point["ID"]}.png', dpi=300, bbox_inches='tight')
+    fig.savefig(outdir / f'{project}_CR_{int(point["ID"])}.png', dpi=300, bbox_inches='tight')
 
     return point
 
@@ -236,14 +242,3 @@ def run(args):
     assert args.filepath.exists(), f'File {args.filepath} does not exist.'
 
     ale(args.filepath, args.date, args.azmangle, args.project, basedir=args.basedir)
-
-
-def main():
-    parser = ArgumentParser(description=__doc__)
-    parser = create_parser(parser)
-    args = parser.parse_args()
-    run(args)
-
-
-if __name__ == '__main__':
-    main()

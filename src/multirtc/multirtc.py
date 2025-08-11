@@ -1,6 +1,5 @@
 """Create an RTC dataset for a multiple satellite platforms"""
 
-import argparse
 from pathlib import Path
 
 from burst2safe.burst2safe import burst2safe
@@ -8,7 +7,7 @@ from s1reader.s1_orbit import retrieve_orbit_file
 
 from multirtc import dem
 from multirtc.base import Slc
-from multirtc.create_rtc import pfa_prototype_geocode, rtc
+from multirtc.create_rtc import rtc
 from multirtc.rtc_options import RtcOptions
 from multirtc.sentinel1 import S1BurstSlc
 from multirtc.sicd import SicdPfaSlc, SicdRzdSlc
@@ -61,7 +60,7 @@ def get_slc(platform: str, granule: str, input_dir: Path) -> Slc:
     return slc
 
 
-def run_multirtc(platform: str, granule: str, resolution: int, work_dir: Path) -> None:
+def run_multirtc(platform: str, granule: str, resolution: int, work_dir: Path, apply_rtc=True) -> None:
     """Create an RTC or Geocoded dataset using the OPERA algorithm.
 
     Args:
@@ -69,6 +68,7 @@ def run_multirtc(platform: str, granule: str, resolution: int, work_dir: Path) -
         granule: Granule name if data is available in ASF archive, or filename if granule is already downloaded.
         resolution: Resolution of the output RTC (in meters).
         work_dir: Working directory for processing.
+        apply_rtc: If True perform radiometric correction; if False, only geocode.
     """
     input_dir, output_dir = prep_dirs(work_dir)
     slc = get_slc(platform, granule, input_dir)
@@ -79,13 +79,17 @@ def run_multirtc(platform: str, granule: str, resolution: int, work_dir: Path) -
         opts = RtcOptions(
             dem_path=str(dem_path),
             output_dir=str(output_dir),
+            apply_rtc=apply_rtc,
             resolution=resolution,
             apply_bistatic_delay=slc.supports_bistatic_delay,
             apply_static_tropo=slc.supports_static_tropo,
         )
         rtc(slc, geogrid, opts)
     else:
-        pfa_prototype_geocode(slc, geogrid, dem_path, output_dir)
+        raise NotImplementedError(
+            'RTC creation is not supported for this input. For polar grid support, use the multirtc docker image:\n'
+            'https://github.com/forrestfwilliams/MultiRTC/pkgs/container/multirtc'
+        )
 
 
 def create_parser(parser):
@@ -99,20 +103,4 @@ def create_parser(parser):
 def run(args):
     if args.work_dir is None:
         args.work_dir = Path.cwd()
-    run_multirtc(args.platform, args.granule, args.resolution, args.work_dir)
-
-
-def main():
-    """Create a RTC or geocoded dataset for a multiple satellite platforms
-
-    Example command:
-    multirtc UMBRA umbra_image.ntif --resolution 40
-    """
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser = create_parser(parser)
-    args = parser.parse_args()
-    run(args)
-
-
-if __name__ == '__main__':
-    main()
+    run_multirtc(args.platform, args.granule, args.resolution, args.work_dir, apply_rtc=True)
