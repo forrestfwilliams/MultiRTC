@@ -8,6 +8,9 @@ and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.5.0]
 
+### Added
+* Geocode-only entrypoint.
+
 ### Changed
 * Update readme with docker instructions and layer info.
 
