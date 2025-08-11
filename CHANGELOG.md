@@ -8,12 +8,16 @@ and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.5.0]
 
+### Added
+* Geocode-only entrypoint.
+
 ### Changed
 * Update readme with docker instructions and layer info.
 
 ### Removed
 * Output of area projection metadata.
 * Prototype polar grid support in favor of full support via the new docker image.
+* Old per-file entrypoints.
 
 ### Fixed
 * Plotting issues with the cal/val submodule.

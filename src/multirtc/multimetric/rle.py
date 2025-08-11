@@ -1,6 +1,5 @@
 """Relative Location Error (RLE) analysis"""
 
-from argparse import ArgumentParser
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -196,14 +195,3 @@ def run(args):
     args.basedir = Path(args.basedir)
     assert args.basedir.exists(), f'Base directory {args.basedir} does not exist'
     rle(args.reference, args.secondary, project=args.project, basedir=args.basedir)
-
-
-def main():
-    parser = ArgumentParser(description=__doc__)
-    parser = create_parser(parser)
-    args = parser.parse_args()
-    run(args)
-
-
-if __name__ == '__main__':
-    main()

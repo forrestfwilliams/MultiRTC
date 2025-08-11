@@ -518,11 +518,16 @@ def rtc(slc, geogrid, opts):
         geocode_kwargs['input_layover_shadow_mask_raster'] = slantrange_layover_shadow_mask_raster
 
     out_geo_nlooks_obj = isce3.io.Raster(nlooks_file, geogrid.width, geogrid.length, 1, gdal.GDT_Float32, raster_format)
-    out_geo_rtc_obj = isce3.io.Raster(rtc_anf_file, geogrid.width, geogrid.length, 1, gdal.GDT_Float32, raster_format)
-    out_geo_rtc_gamma0_to_sigma0_obj = isce3.io.Raster(
-        rtc_anf_gamma0_to_sigma0_file, geogrid.width, geogrid.length, 1, gdal.GDT_Float32, raster_format
-    )
-    geocode_kwargs['out_geo_rtc_gamma0_to_sigma0'] = out_geo_rtc_gamma0_to_sigma0_obj
+    out_geo_rtc_obj = None
+    if opts.apply_rtc:
+        out_geo_rtc_obj = isce3.io.Raster(
+            rtc_anf_file, geogrid.width, geogrid.length, 1, gdal.GDT_Float32, raster_format
+        )
+        out_geo_rtc_gamma0_to_sigma0_obj = isce3.io.Raster(
+            rtc_anf_gamma0_to_sigma0_file, geogrid.width, geogrid.length, 1, gdal.GDT_Float32, raster_format
+        )
+        geocode_kwargs['out_geo_rtc_gamma0_to_sigma0'] = out_geo_rtc_gamma0_to_sigma0_obj
+
     if opts.apply_bistatic_delay or opts.apply_static_tropo:
         rg_lut, az_lut = compute_correction_lut(
             slc.source,
@@ -611,26 +616,27 @@ def rtc(slc, geogrid, opts):
     out_geo_nlooks_obj.close_dataset()
     del out_geo_nlooks_obj
 
-    out_geo_rtc_obj.close_dataset()
-    del out_geo_rtc_obj
+    if opts.apply_rtc:
+        out_geo_rtc_gamma0_to_sigma0_obj.close_dataset()
+        del out_geo_rtc_gamma0_to_sigma0_obj
 
-    out_geo_rtc_gamma0_to_sigma0_obj.close_dataset()
-    del out_geo_rtc_gamma0_to_sigma0_obj
+        out_geo_rtc_obj.close_dataset()
+        del out_geo_rtc_obj
 
-    radar_grid_file_dict = {}
-    save_intermediate_geocode_files(
-        geogrid,
-        opts.dem_interpolation_method_isce3,
-        product_id,
-        output_dir,
-        raster_extension,
-        dem_raster,
-        radar_grid_file_dict,
-        lookside,
-        wavelength,
-        orbit,
-        doppler=doppler,
-    )
+        radar_grid_file_dict = {}
+        save_intermediate_geocode_files(
+            geogrid,
+            opts.dem_interpolation_method_isce3,
+            product_id,
+            output_dir,
+            raster_extension,
+            dem_raster,
+            radar_grid_file_dict,
+            lookside,
+            wavelength,
+            orbit,
+            doppler=doppler,
+        )
     t_end = time.time()
     logger.info(f'elapsed time: {t_end - t_start}')
 

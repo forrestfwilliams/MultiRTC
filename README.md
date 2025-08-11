@@ -45,6 +45,14 @@ Where `PLATFORM` is the name of the satellite platform (currently `S1`, `CAPELLA
 
 Output RTC pixel values represent gamma0 power.
 
+To create an image that is geocoded but not radiometricly corrected, use the `geocoded` flag instead:
+
+```bash
+multirtc geocode PLATFORM SLC-GRANULE --resolution RESOLUTION --work-dir WORK-DIR
+```
+
+Output geocoded pixel values represent sigma0 power.
+
 ### Running via Docker
 In addition to the main python interface, I've also provided an experimental docker container that contains full support for polar grid format SICD data. Encapsulating this functionality in a docker container is ncessary for now because it requires re-compiling a development version of ISCE3. The docker container can be run using a similar interface, with exception of needing to pass your EarthData credentials and the need to pass a mounted volume with an `input` and `output` directory inside:
 
@@ -78,8 +86,10 @@ MultiRTC outputs one main RTC image and seven metadata images as GeoTIFFs. All l
 
 More information on the metadata images can be found in the OPERA RTC Static Product guide on the [OPERA RTC Product website](https://www.jpl.nasa.gov/go/opera/products/rtc-product/).
 
+All metadata images other than `FILEID_mask.tif`, and `FILEID_number_of_looks.tif` are omitted for geocode-only products.
+
 ### DEM options
-Currently, only the OPERA DEM is supported. This is a global Height Above Ellipsoid DEM sourced from the [COP-30 DEM](https://portal.opentopography.org/raster?opentopoID=OTSDEM.032021.4326.3). In the future, we hope to support a wider variety of automatically retrieved and user provided DEMs.
+Currently, only the OPERA DEM is supported. This is a global Height Above Ellipsoid DEM sourced from the [COP-30 DEM](https://portal.opentopography.org/raster?opentopoID=OTSDEM.032021.4326.3). In the future, we hope to support a wider variety of automatically retrieved and user provided DEMs. If the low resolution of the default DEM is causing radiometry issues, try using the `geocode` instead of `rtc` workflow.
 
 ## Calibration & Validation Subcommands
 

@@ -1,6 +1,5 @@
 """Absolute Location Error (ALE) analysis"""
 
-from argparse import ArgumentParser
 from datetime import datetime
 from pathlib import Path
 
@@ -243,14 +242,3 @@ def run(args):
     assert args.filepath.exists(), f'File {args.filepath} does not exist.'
 
     ale(args.filepath, args.date, args.azmangle, args.project, basedir=args.basedir)
-
-
-def main():
-    parser = ArgumentParser(description=__doc__)
-    parser = create_parser(parser)
-    args = parser.parse_args()
-    run(args)
-
-
-if __name__ == '__main__':
-    main()
