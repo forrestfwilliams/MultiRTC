@@ -1,6 +1,5 @@
 """Absolute Location Error (ALE) analysis"""
 
-from argparse import ArgumentParser
 from datetime import datetime
 from pathlib import Path
 

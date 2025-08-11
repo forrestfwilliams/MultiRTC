@@ -1,6 +1,5 @@
 """Create an RTC dataset for a multiple satellite platforms"""
 
-import argparse
 from pathlib import Path
 
 from burst2safe.burst2safe import burst2safe
