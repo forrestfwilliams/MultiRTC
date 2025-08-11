@@ -71,7 +71,7 @@ PROJECT/
         |--input.slc (if needed)
     |--output/
 ```
-If you're encountering `permission denied` errors when running the container, make sure other users are allowed to read/write to your project directory (`chmod -R a+rwX ~/LOCAL_PATH/PROJECT`).
+If you're encountering `permission denied` errors when running the container, make sure that the input and output folders are owned by the same group and user IDs that the container uses (`chown -R 1000:1000 ~/LOCAL_PATH/PROJECT`).
 
 ### Output Layers
 MultiRTC outputs one main RTC image and seven metadata images as GeoTIFFs. All layers follow the naming schema `{FILEID}_{DATASET}.tif`, with the main RTC image omiting the `_{DATASET}` component. The layers are as follows:
