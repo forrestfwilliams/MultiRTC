@@ -61,7 +61,7 @@ def get_slc(platform: str, granule: str, input_dir: Path) -> Slc:
     return slc
 
 
-def run_multirtc(platform: str, granule: str, resolution: int, work_dir: Path) -> None:
+def run_multirtc(platform: str, granule: str, resolution: int, work_dir: Path, apply_rtc=True) -> None:
     """Create an RTC or Geocoded dataset using the OPERA algorithm.
 
     Args:
@@ -69,6 +69,7 @@ def run_multirtc(platform: str, granule: str, resolution: int, work_dir: Path) -
         granule: Granule name if data is available in ASF archive, or filename if granule is already downloaded.
         resolution: Resolution of the output RTC (in meters).
         work_dir: Working directory for processing.
+        apply_rtc: If True perform radiometric correction; if False, only geocode.
     """
     input_dir, output_dir = prep_dirs(work_dir)
     slc = get_slc(platform, granule, input_dir)
@@ -79,6 +80,7 @@ def run_multirtc(platform: str, granule: str, resolution: int, work_dir: Path) -
         opts = RtcOptions(
             dem_path=str(dem_path),
             output_dir=str(output_dir),
+            apply_rtc=apply_rtc,
             resolution=resolution,
             apply_bistatic_delay=slc.supports_bistatic_delay,
             apply_static_tropo=slc.supports_static_tropo,
@@ -102,14 +104,14 @@ def create_parser(parser):
 def run(args):
     if args.work_dir is None:
         args.work_dir = Path.cwd()
-    run_multirtc(args.platform, args.granule, args.resolution, args.work_dir)
+    run_multirtc(args.platform, args.granule, args.resolution, args.work_dir, apply_rtc=True)
 
 
 def main():
-    """Create a RTC or geocoded dataset for a multiple satellite platforms
+    """Create a RTC dataset for a multiple satellite platforms
 
     Example command:
-    multirtc UMBRA umbra_image.ntif --resolution 40
+    multirtc rtc UMBRA umbra_image.ntif --resolution 40
     """
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser = create_parser(parser)
