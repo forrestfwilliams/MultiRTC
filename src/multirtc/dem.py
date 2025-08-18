@@ -1,3 +1,4 @@
+"""Prepare an external DEM for use in MultiRTC"""
 from concurrent.futures import ThreadPoolExecutor
 from itertools import product
 from pathlib import Path
@@ -224,14 +225,15 @@ def convert_to_height_above_ellipsoid(dem_file: Path, input_datum) -> None:
         del dem_ds
 
 
-def prep_dem(input_path: Path, input_datum: str, output_path: Path) -> None:
+def prep_dem(input_path: Path, output_path: Path, input_datum: str) -> None:
     """Prepare the DEM for processing by reprojecting it to EPSG:4326 and (optionally) converting it to height above ellipsoid.
 
     Args:
-        dem_path: Path to the DEM file. If None, the NISAR DEM will be downloaded.
+        dem_path: Path to the DEM file.
         input_datum: Datum of the input DEM, either 'WGS84', 'EGM2008', 'NAD88'.
         output_path: Path where the prepared DEM will be saved.
     """
+    assert input_datum in VALID_DATUMS, f'Input datum must be one of {VALID_DATUMS}, got {input_datum}.'
     copyfile(input_path, output_path)
     info = gdal.Info(str(input_path), format='json')
     srs = osr.SpatialReference()
@@ -245,3 +247,19 @@ def prep_dem(input_path: Path, input_datum: str, output_path: Path) -> None:
             multithread=True,
         )
     convert_to_height_above_ellipsoid(output_path, input_datum.lower())
+
+
+def create_parser(parser):
+    parser.add_argument('input-dem', help='Path to the input DEM file to prepare for processing.')
+    parser.add_argument('output-dem', help='Path where the prepared DEM will be saved.')
+    parser.add_argument(
+        'input-datum', choices=VALID_DATUMS, help='Datum of the input DEM (supported: WGS84, EGM2008, NAD88).'
+    )
+    return parser
+
+
+def run(args):
+    args.input_dem = Path(args.input_dem)
+    assert args.input_dem.exists(), f'DEM file {args.input_dem} does not exist.'
+    args.output_dem = Path(args.output_dem)
+    prep_dem(args.input_dem, args.output_dem, args.input_datum)
