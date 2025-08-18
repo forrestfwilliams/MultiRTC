@@ -10,11 +10,13 @@ class RtcOptions:
 
     output_dir: str
     dem_path: str
-    apply_rtc: bool = True
+    apply_rtc: bool
+    resolution: float
     apply_thermal_noise: bool = True
     apply_abs_rad: bool = True
     apply_bistatic_delay: bool = True
     apply_static_tropo: bool = True
+    terrain_radiometry: str = 'gamma0'  # 'gamma0' or 'sigma0'
     apply_valid_samples_sub_swath_masking: bool = True
     apply_shadow_masking: bool = True
     dem_interpolation_method: str = 'biquintic'
@@ -28,33 +30,22 @@ class RtcOptions:
     clip_min: float = np.nan
     clip_max: float = np.nan
     upsample_radar_grid: bool = False
-    terrain_radiometry: str = 'gamma0'  # 'gamma0' or 'sigma0'
     rtc_algorithm_type: str = 'area_projection'  # 'area_projection' or 'bilinear_distribution'
     input_terrain_radiometry: str = 'beta0'
-    rtc_min_value_db: int = -30.0
+    rtc_min_value_db: float = -30.0
     rtc_upsampling: int = 2
     rtc_area_beta_mode: str = 'auto'
     geo2rdr_threshold: float = 1.0e-7
     geo2rdr_numiter: int = 50
     rdr2geo_threshold: float = 1.0e-7
     rdr2geo_numiter: int = 25
-    output_epsg: int = None
-    resolution: int = 30
+    output_epsg: int | None = None
 
     def __post_init__(self):
         if not self.apply_rtc:
-            if self.save_rtc_anf:
-                raise ValueError('RTC ANF flags are only available with RTC enabled')
-            if self.save_rtc_anf_gamma0_to_sigma0:
-                raise ValueError('RTC ANF gamma0 to sigma0 flags are only available with RTC enabled')
+            self.terrain_radiometry: str = 'sigma0'
 
-        if self.terrain_radiometry == 'sigma0' and self.save_rtc_anf_gamma0_to_sigma0:
-            raise ValueError('RTC ANF gamma0 to sigma0 flags are only available with output type set to gamma0')
-
-        if self.apply_rtc:
-            self.layer_name_rtc_anf = f'rtc_anf_{self.terrain_radiometry}_to_{self.input_terrain_radiometry}'
-        else:
-            self.layer_name_rtc_anf = ''
+        self.layer_name_rtc_anf = f'rtc_anf_{self.terrain_radiometry}_to_{self.input_terrain_radiometry}'
 
         if self.dem_interpolation_method == 'biquintic':
             self.dem_interpolation_method_isce3 = isce3.core.DataInterpMethod.BIQUINTIC
@@ -93,11 +84,6 @@ class RtcOptions:
             self.terrain_radiometry_isce3 = isce3.geometry.RtcOutputTerrainRadiometry.GAMMA_NAUGHT
         else:
             raise ValueError(f'Invalid terrain radiometry: {self.terrain_radiometry}')
-
-        if self.apply_rtc:
-            self.layer_name_rtc_anf = f'rtc_anf_{self.terrain_radiometry}_to_{self.input_terrain_radiometry}'
-        else:
-            self.layer_name_rtc_anf = ''
 
         if self.rtc_area_beta_mode == 'pixel_area':
             self.rtc_area_beta_mode_isce3 = isce3.geometry.RtcAreaBetaMode.PIXEL_AREA
