@@ -1,4 +1,5 @@
 """Prepare an external DEM for use in MultiRTC"""
+
 from concurrent.futures import ThreadPoolExecutor
 from itertools import product
 from pathlib import Path
