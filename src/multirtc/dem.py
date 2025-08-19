@@ -15,22 +15,22 @@ from shapely.geometry import LinearRing, Polygon, box
 gdal.UseExceptions()
 URL = 'https://nisar.asf.earthdatacloud.nasa.gov/STATIC/DEM/v1.1/EPSG4326'
 EGM2008_GEOID = {
-    'world': [
+    'WORLD': [
         '/vsicurl/https://asf-dem-west.s3.amazonaws.com/GEOID/us_nga_egm2008_1.tif',
         box(-180.0083333, -90.0083333, 180.0083333, 90.0083333),
     ]
 }
 NAD88 = {
-    'conus': [
-        '/vsicurl/https://asf-dem-west.s3.amazonaws.com/GEOID/us_noaa_g2012bu0.tif',
+    'CONUS': [
+        '/vsicurl/https://asf-dem-west.s3.amazonaws.com/GEOID/us_noaa_g2012bu0_wgs84.tif',
         box(-130.0083313, 23.9916667, -59.9920366, 58.0083351),
     ],
-    'ak_east': [
-        '/vsicurl/https://asf-dem-west.s3.amazonaws.com/GEOID/us_noaa_g2012ba0_east.tif',
+    'AK_EAST': [
+        '/vsicurl/https://asf-dem-west.s3.amazonaws.com/GEOID/us_noaa_g2012ba0_wgs84_east.tif',
         box(171.9916687, 48.9916583, 234.008, 72.008),
     ],
-    'ak_west': [
-        '/vsicurl/https://asf-dem-west.s3.amazonaws.com/GEOID/us_noaa_g2012ba0_west.tif',
+    'AK_WEST': [
+        '/vsicurl/https://asf-dem-west.s3.amazonaws.com/GEOID/us_noaa_g2012ba0_wgs84_west.tif',
         box(-188.008, 48.992, -125.9915921, 72.0083313),
     ],
 }
@@ -183,10 +183,10 @@ def download_opera_dem_for_footprint(output_path: Path, footprint: Polygon, buff
 
 def get_correction_geoid(bbox: Polygon, input_datum: str) -> str:
     """Get the path to the geoid correction file based on the bounding box and input datum."""
-    if input_datum.lower() == 'egm2008':
-        return EGM2008_GEOID['world'][0]
+    if input_datum.upper() == 'EGM2008':
+        return EGM2008_GEOID['WORLD'][0]
 
-    if input_datum.lower() == 'nad88':
+    if input_datum.upper() == 'NAD88':
         for region, (correction_path, region_bbox) in NAD88.items():
             if bbox.intersects(region_bbox):
                 return correction_path
@@ -196,7 +196,7 @@ def get_correction_geoid(bbox: Polygon, input_datum: str) -> str:
 
 def convert_to_height_above_ellipsoid(dem_file: Path, input_datum) -> None:
     assert input_datum in VALID_DATUMS, f'Input datum must be one of {VALID_DATUMS}, got {input_datum}.'
-    if input_datum.lower() == 'wgs84':
+    if input_datum.upper() == 'WGS84':
         return
     dem_info = gdal.Info(str(dem_file), format='json')
     dem_bbox = get_bbox_from_info(dem_info)
@@ -246,14 +246,14 @@ def prep_dem(input_path: Path, output_path: Path, input_datum: str) -> None:
             resampleAlg='cubic',
             multithread=True,
         )
-    convert_to_height_above_ellipsoid(output_path, input_datum.lower())
+    convert_to_height_above_ellipsoid(output_path, input_datum.upper())
 
 
 def create_parser(parser):
-    parser.add_argument('input-dem', help='Path to the input DEM file to prepare for processing.')
-    parser.add_argument('output-dem', help='Path where the prepared DEM will be saved.')
+    parser.add_argument('input_dem', help='Path to the input DEM file to prepare for processing.')
+    parser.add_argument('output_dem', help='Path where the prepared DEM will be saved.')
     parser.add_argument(
-        'input-datum', choices=VALID_DATUMS, help='Datum of the input DEM (supported: WGS84, EGM2008, NAD88).'
+        'input_datum', choices=VALID_DATUMS, help='Datum of the input DEM (supported: WGS84, EGM2008, NAD88).'
     )
     return parser
 
