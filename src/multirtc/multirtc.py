@@ -111,4 +111,4 @@ def run(args):
         assert args.dem.exists(), f'DEM file {args.dem} does not exist.'
     if args.work_dir is None:
         args.work_dir = Path.cwd()
-    run_multirtc(args.platform, args.granule, args.resolution, args.dem, args.work_dir, apply_rtc=True)
+    run_multirtc(args.platform, args.granule, args.resolution, args.work_dir, args.dem, apply_rtc=True)
