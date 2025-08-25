@@ -8,6 +8,11 @@ and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.5.1]
 
+### Fixed
+* Removed hyp3lib to fix environment build issue related to pinning of GDAL version.
+
+## [0.5.1]
+
 ### Added
 * Support for custom DEMs.
 * Support for prepping external DEMs to ISCE3-compatible format.
