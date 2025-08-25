@@ -18,7 +18,8 @@ dependencies:
   - sarpy
   - burst2safe
   - tqdm
-  - hyp3lib
+  - requests
+  - urllib3
   # For multimetric
   - matplotlib
   - pandas

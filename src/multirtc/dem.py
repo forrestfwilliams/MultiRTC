@@ -8,9 +8,10 @@ from tempfile import NamedTemporaryFile
 
 import numpy as np
 import shapely
-from hyp3lib.fetch import download_file
 from osgeo import gdal, osr
 from shapely.geometry import LinearRing, Polygon, box
+
+from multirtc.fetch import download_file
 
 
 gdal.UseExceptions()
