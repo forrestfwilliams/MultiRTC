@@ -1,6 +1,6 @@
 import argparse
 
-from multirtc import geocode, multirtc
+from multirtc import dem, geocode, multirtc
 from multirtc.multimetric import ale, point_target, rle
 
 
@@ -17,6 +17,9 @@ def main():
 
     geocode_parser = multirtc.create_parser(subparsers.add_parser('geocode', help=geocode.__doc__))
     geocode_parser.set_defaults(func=geocode.run)
+
+    dem_parser = dem.create_parser(subparsers.add_parser('prepdem', help=dem.__doc__))
+    dem_parser.set_defaults(func=dem.run)
 
     ale_parser = ale.create_parser(subparsers.add_parser('ale', help=ale.__doc__))
     ale_parser.set_defaults(func=ale.run)

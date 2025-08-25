@@ -71,7 +71,7 @@ PROJECT/
         |--input.slc (if needed)
     |--output/
 ```
-If you're encountering `permission denied` errors when running the container, make sure other users are allowed to read/write to your project directory (`chmod -R a+rwX ~/LOCAL_PATH/PROJECT`).
+If you're encountering `permission denied` errors when running the container, make sure that the input and output folders are owned by the same group and user IDs that the container uses (`chown -R 1000:1000 ~/LOCAL_PATH/PROJECT`).
 
 ### Output Layers
 MultiRTC outputs one main RTC image and seven metadata images as GeoTIFFs. All layers follow the naming schema `{FILEID}_{DATASET}.tif`, with the main RTC image omiting the `_{DATASET}` component. The layers are as follows:
@@ -89,7 +89,24 @@ More information on the metadata images can be found in the OPERA RTC Static Pro
 All metadata images other than `FILEID_mask.tif`, and `FILEID_number_of_looks.tif` are omitted for geocode-only products.
 
 ### DEM options
-Currently, only the OPERA DEM is supported. This is a global Height Above Ellipsoid DEM sourced from the [COP-30 DEM](https://portal.opentopography.org/raster?opentopoID=OTSDEM.032021.4326.3). In the future, we hope to support a wider variety of automatically retrieved and user provided DEMs. If the low resolution of the default DEM is causing radiometry issues, try using the `geocode` instead of `rtc` workflow.
+Currently, only the NISAR DEM can be automatically downloaded and it is the default DEM option. This is a global height above the WGS84 ellipsoid DEM sourced from the [COP-30 DEM](https://portal.opentopography.org/raster?opentopoID=OTSDEM.032021.4326.3).
+
+MultiRTC also supports custom DEMs via the use of the `--dem` option. For example:
+```bash
+multirtc rtc PLATFORM SLC-GRANULE --dem DEM-PATH --resolution RESOLUTION --work-dir WORK-DIR
+```
+We recommend using [OpenTopography](https://opentopography.org) to locate high-resolution DEMs for your area of interest. Note that custom DEM must meet three criteria to be used for processing:
+1. The DEM must fully cover the spatial extent of your input SLC granule.
+1. The DEM must be in the EPSG:4326 (lat/lon) spatial projection.
+1. The height values of the DEM must represent the height above the WGS84 ellipsoid.
+
+The `prepdem` subroutine can be used to reformat an existing DEM to meet the final two requirements:
+```bash
+multirtc prepdem INPUT-DEM-PATH OUTPUT-DEM-PATH VERTICAL-DATUM
+```
+Where `VERTICAL-DATUM` is the vertical datum of your input DEM. Currently the `WGS84`, `EGM2008`, and `NAD88` (over the United States) datums are supported.
+
+If the low resolution of the available DEM options is causing radiometry issues, try using the `geocode` workflow instead of `rtc`.
 
 ## Calibration & Validation Subcommands
 
