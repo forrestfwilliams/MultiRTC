@@ -64,7 +64,11 @@ def validate_dem(dem_path: Path, footprint: Polygon) -> None:
 
     dem_extent = get_bbox_from_info(info)
     if not dem_extent.contains(footprint):
-        raise ValueError(f'DEM does not fully cover the footprint: {footprint}')
+        dem_bound_str = ', '.join([str(round(x, 3)) for x in dem_extent.bounds])
+        footprint_bound_str = ', '.join([str(round(x, 3)) for x in footprint.bounds])
+        raise ValueError(
+            f'DEM does not fully cover the footprint: ({dem_bound_str}) for DEM, vs ({footprint_bound_str})'
+        )
 
 
 def check_antimeridean(poly: Polygon) -> list[Polygon]:
@@ -221,10 +225,34 @@ def convert_to_height_above_ellipsoid(dem_file: Path, input_datum) -> None:
 
         dem_ds = gdal.Open(str(dem_file), gdal.GA_Update)
         dem_data = dem_ds.GetRasterBand(1).ReadAsArray()
-        dem_data += geoid_data
+        nan_value = dem_ds.GetRasterBand(1).GetNoDataValue()
+        if nan_value is not None:
+            nan_mask = dem_data == nan_value
+            dem_data += geoid_data
+            dem_data[nan_mask] = nan_value
+        else:
+            dem_data += geoid_data
         dem_ds.GetRasterBand(1).WriteArray(dem_data)
         dem_ds.FlushCache()
         del dem_ds
+
+
+def set_nodata_value(dem_file: Path, nodata_value: float) -> None:
+    """Set the NoData value for the DEM file.
+
+    Args:
+        dem_file: Path to the DEM file.
+        nodata_value: Value to set as NoData.
+    """
+    dem_ds = gdal.Open(str(dem_file), gdal.GA_Update)
+    band = dem_ds.GetRasterBand(1)
+    if band.GetNoDataValue() is not None:
+        data = band.ReadAsArray()
+        data[data == band.GetNoDataValue()] = nodata_value
+        band.WriteArray(data)
+    band.SetNoDataValue(nodata_value)
+    band.FlushCache()
+    del dem_ds
 
 
 def prep_dem(input_path: Path, output_path: Path, input_datum: str) -> None:
@@ -249,6 +277,7 @@ def prep_dem(input_path: Path, output_path: Path, input_datum: str) -> None:
             multithread=True,
         )
     convert_to_height_above_ellipsoid(output_path, input_datum.upper())
+    set_nodata_value(output_path, 0)
 
 
 def create_parser(parser):
