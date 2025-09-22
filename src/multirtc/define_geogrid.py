@@ -1,6 +1,7 @@
 import isce3
 import numpy as np
-from shapely.geometry import Polygon
+from pyproj import Transformer
+from shapely.geometry import Polygon, box
 
 
 def get_point_epsg(lat: float, lon: float) -> int:
@@ -111,21 +112,36 @@ def get_geogrid_poly(geogrid: isce3.product.GeoGridParameters) -> Polygon:
     return poly
 
 
-def generate_geogrids(slc, spacing_meters: int, epsg: int) -> isce3.product.GeoGridParameters:
+def generate_geogrids(
+    slc, spacing_meters: int, epsg: int, bounds: list[float] | None = None
+) -> isce3.product.GeoGridParameters:
     """Compute a geogrid based on the radar grid of the SLC and the specified spacing.
 
     Args:
         slc: Slc-derived object containing radar grid, orbit, and doppler centroid grid.
         spacing_meters: Spacing in meters for the geogrid.
+        bounds: Optional list of [minX, minY, maxX, maxY] in Lat/Lon to limit the geogrid extent.
         epsg: EPSG code for the coordinate reference system.
 
     Returns:
         A geogrid object with the specified spacing.
     """
     x_spacing = spacing_meters
-    y_spacing = -1 * np.abs(spacing_meters)
-    geogrid = isce3.product.bbox_to_geogrid(
-        slc.radar_grid, slc.orbit, slc.doppler_centroid_grid, x_spacing, y_spacing, epsg
-    )
+    y_spacing = float(-1 * np.abs(spacing_meters))
+    if bounds is not None:
+        msg = f'Provided bounds do not intersect SLC footprint {", ".join([str(round(x, 4)) for x in bounds])}'
+        assert slc.footprint.intersects(box(*bounds)), msg
+        transformer = Transformer.from_crs('EPSG:4326', f'EPSG:{epsg}', always_xy=True)
+        minx, miny = transformer.transform(bounds[0], bounds[1])
+        maxx, maxy = transformer.transform(bounds[2], bounds[3])
+        length = (maxy - miny) // spacing_meters
+        width = (maxx - minx) // spacing_meters
+        geogrid = isce3.ext.isce3.product.GeoGridParameters(
+            minx, maxy, x_spacing, y_spacing, int(width), int(length), epsg
+        )
+    else:
+        geogrid = isce3.product.bbox_to_geogrid(
+            slc.radar_grid, slc.orbit, slc.doppler_centroid_grid, x_spacing, y_spacing, epsg
+        )
     geogrid_snapped = snap_geogrid(geogrid, geogrid.spacing_x, geogrid.spacing_y)
     return geogrid_snapped

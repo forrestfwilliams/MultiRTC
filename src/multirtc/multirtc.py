@@ -4,6 +4,7 @@ from pathlib import Path
 
 from burst2safe.burst2safe import burst2safe
 from s1reader.s1_orbit import retrieve_orbit_file
+from shapely.geometry import box
 
 from multirtc import dem
 from multirtc.base import Slc
@@ -61,7 +62,13 @@ def get_slc(platform: str, granule: str, input_dir: Path) -> Slc:
 
 
 def run_multirtc(
-    platform: str, granule: str, resolution: int, work_dir: Path, dem_path: Path | None = None, apply_rtc=True
+    platform: str,
+    granule: str,
+    resolution: int,
+    work_dir: Path,
+    dem_path: Path | None = None,
+    bounds: list[float] | None = None,
+    apply_rtc=True,
 ) -> None:
     """Create an RTC or Geocoded dataset using the OPERA algorithm.
 
@@ -71,15 +78,20 @@ def run_multirtc(
         resolution: Resolution of the output RTC (in meters).
         work_dir: Working directory for processing.
         dem_path: Path to the DEM to use for processing. If None, the NISAR DEM will be downloaded.
+        bounds: List of [minX, minY, maxX, maxY] in Lat/Lon to limit processing area. If None, full scene is processed.
         apply_rtc: If True perform radiometric correction; if False, only geocode.
     """
     input_dir, output_dir = prep_dirs(work_dir)
     slc = get_slc(platform, granule, input_dir)
+    if bounds is not None:
+        msg = f'Provided bounds do not intersect SLC footprint {", ".join([str(round(x, 4)) for x in bounds])}'
+        assert slc.footprint.intersects(box(*bounds)), msg
     if dem_path is None:
+        dem_bounds = slc.footprint if bounds is None else box(*bounds)
         dem_path = input_dir / 'dem.tif'
-        dem.download_opera_dem_for_footprint(dem_path, slc.footprint)
+        dem.download_opera_dem_for_footprint(dem_path, dem_bounds)
     dem.validate_dem(dem_path, slc.footprint)
-    geogrid = slc.create_geogrid(spacing_meters=resolution)
+    geogrid = slc.create_geogrid(bounds=bounds, spacing_meters=resolution)
     if slc.supports_rtc:
         opts = RtcOptions(
             dem_path=str(dem_path),
@@ -102,6 +114,7 @@ def create_parser(parser):
     parser.add_argument('granule', help='Data granule to create an RTC for.')
     parser.add_argument('--resolution', type=float, help='Resolution of the output RTC (m)')
     parser.add_argument('--dem', type=Path, default=None, help='Path to the DEM to use for processing')
+    parser.add_argument('--bounds', type=float, nargs=4, default=None, help='minX minY maxX maxY in Lat/Lon')
     parser.add_argument('--work-dir', type=Path, default=None, help='Working directory for processing')
     return parser
 
@@ -111,4 +124,4 @@ def run(args):
         assert args.dem.exists(), f'DEM file {args.dem} does not exist.'
     if args.work_dir is None:
         args.work_dir = Path.cwd()
-    run_multirtc(args.platform, args.granule, args.resolution, args.work_dir, args.dem, apply_rtc=True)
+    run_multirtc(args.platform, args.granule, args.resolution, args.work_dir, args.dem, args.bounds, apply_rtc=True)
