@@ -15,7 +15,7 @@ from multirtc.fetch import download_file
 
 
 gdal.UseExceptions()
-URL = 'https://nisar.asf.earthdatacloud.nasa.gov/STATIC/DEM/v1.1/EPSG4326'
+URL = 'https://nisar.asf.earthdatacloud.nasa.gov/NISAR/DEM/v1.2/EPSG4326'
 EGM2008_GEOID = {
     'WORLD': [
         '/vsicurl/https://asf-dem-west.s3.amazonaws.com/GEOID/us_nga_egm2008_1.tif',
@@ -133,8 +133,8 @@ def get_dem_granule_url(lat: int, lon: int) -> str:
     lon_tens = np.floor_divide(lon, 20) * 20
     lon_cardinal = 'W' if lon_tens < 0 else 'E'
 
-    prefix = f'{lat_cardinal}{np.abs(lat_tens):02d}_{lon_cardinal}{np.abs(lon_tens):03d}'
-    filename = f'DEM_{lat_cardinal}{np.abs(lat):02d}_00_{lon_cardinal}{np.abs(lon):03d}_00.tif'
+    prefix = f'{lat_cardinal}{np.abs(lat_tens):02d}/{lat_cardinal}{np.abs(lat_tens):02d}_{lon_cardinal}{np.abs(lon_tens):03d}'
+    filename = f'DEM_{lat_cardinal}{np.abs(lat):02d}_00_{lon_cardinal}{np.abs(lon):03d}_00_C01.tif'
     file_url = f'{URL}/{prefix}/{filename}'
     return file_url
 
