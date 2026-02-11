@@ -118,7 +118,7 @@ def check_antimeridean(poly: Polygon) -> list[Polygon]:
 
 
 def get_dem_granule_url(lat: int, lon: int) -> str:
-    """Generate the URL for the Copernicus DEM for NISAR granule based on latitude and longitude.
+    """Generate the URL for the Modified Copernicus DEM for NISAR granule based on latitude and longitude.
 
     Args:
         lat: Latitude in degrees.
@@ -156,7 +156,7 @@ def get_latlon_pairs(polygon: Polygon) -> list[tuple[float, float]]:
 
 def download_opera_dem_for_footprint(output_path: Path, footprint: Polygon, buffer: float = 0.2) -> None:
     """
-    Download the Copernicus DEM for NISAR for a given footprint and save it to the specified output path.
+    Download the Modified Copernicus DEM for NISAR for a given footprint and save it to the specified output path.
 
     Args:
         output_path: Path where the DEM will be saved.
