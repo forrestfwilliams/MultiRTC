@@ -68,12 +68,10 @@ def download_file(
         with session.get(url, stream=True) as s:
             download_path = _get_download_path(s.url, s.headers.get('content-disposition'), directory)
             s.raise_for_status()
-            bytes_written = 0
             with open(download_path, 'wb') as f:
                 for chunk in s.iter_content(chunk_size=chunk_size):
                     if chunk:
                         f.write(chunk)
-                        bytes_written += len(chunk)
             logging.info(f'Download successful: {url}')
     except requests.exceptions.RequestException as e:
         logging.exception(f'Download failed: {url}')
