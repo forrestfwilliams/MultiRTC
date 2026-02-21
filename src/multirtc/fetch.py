@@ -63,13 +63,22 @@ def download_file(
     session.mount('https://', HTTPAdapter(max_retries=retry_strategy))
     session.mount('http://', HTTPAdapter(max_retries=retry_strategy))
 
-    with session.get(url, stream=True) as s:
-        download_path = _get_download_path(s.url, s.headers.get('content-disposition'), directory)
-        s.raise_for_status()
-        with open(download_path, 'wb') as f:
-            for chunk in s.iter_content(chunk_size=chunk_size):
-                if chunk:
-                    f.write(chunk)
-    session.close()
+    download_path = None
+    try:
+        with session.get(url, stream=True) as s:
+            download_path = _get_download_path(s.url, s.headers.get('content-disposition'), directory)
+            s.raise_for_status()
+            with open(download_path, 'wb') as f:
+                for chunk in s.iter_content(chunk_size=chunk_size):
+                    if chunk:
+                        f.write(chunk)
+            logging.info(f'Download successful: {url}')
+    except requests.exceptions.RequestException as e:
+        logging.exception(f'Download failed: {url}')
+        if download_path is not None:
+            download_path.unlink(missing_ok=True) # delete any partial downloads
+        raise
+    finally:
+        session.close()
 
     return str(download_path)
