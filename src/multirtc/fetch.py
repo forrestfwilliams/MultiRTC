@@ -76,7 +76,7 @@ def download_file(
     except requests.exceptions.RequestException:
         logging.exception(f'Download failed: {url}')
         if download_path is not None:
-            download_path.unlink(missing_ok=True) # delete any partial downloads
+            download_path.unlink(missing_ok=True)  # delete any partial downloads
         raise
     finally:
         session.close()
