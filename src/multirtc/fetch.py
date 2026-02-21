@@ -73,7 +73,7 @@ def download_file(
                     if chunk:
                         f.write(chunk)
             logging.info(f'Download successful: {url}')
-    except requests.exceptions.RequestException as e:
+    except requests.exceptions.RequestException:
         logging.exception(f'Download failed: {url}')
         if download_path is not None:
             download_path.unlink(missing_ok=True) # delete any partial downloads
