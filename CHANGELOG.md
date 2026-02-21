@@ -7,6 +7,8 @@ and this project adheres to [PEP 440](https://www.python.org/dev/peps/pep-0440/)
 and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.5.3]
+
+### Changed
 * Change "OPERA DEM" references to "Modified Copernicus DEM for NISAR"
 * Update Modified Copernicus DEM for NISAR endpoints for v1.2
 * Add `fetch.download_file()` exception handling and delete partial downloads
