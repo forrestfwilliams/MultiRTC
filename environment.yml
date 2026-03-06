@@ -6,7 +6,7 @@ dependencies:
   # For running
   - python>=3.10
   - pip
-  - gdal>=3.0
+  - gdal>=3.0,<3.11.0
   - numpy>=1.20
   - isce3
   - boto3

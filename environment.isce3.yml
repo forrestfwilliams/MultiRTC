@@ -14,7 +14,7 @@ dependencies:
   # host
   - eigen
   - fftw
-  - gdal
+  - gdal<3.11.0
   - gmock
   - gtest
   - hdf5
