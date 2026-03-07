@@ -134,7 +134,7 @@ def get_dem_granule_url(lat: int, lon: int) -> str:
     lon_cardinal = 'W' if lon_tens < 0 else 'E'
 
     prefix = f'{lat_cardinal}{np.abs(lat_tens):02d}/{lat_cardinal}{np.abs(lat_tens):02d}_{lon_cardinal}{np.abs(lon_tens):03d}'
-    filename = f'DEM{lat_cardinal}{np.abs(lat):02d}_00_{lon_cardinal}{np.abs(lon):03d}_00_C01.tif'
+    filename = f'DEM_{lat_cardinal}{np.abs(lat):02d}_00_{lon_cardinal}{np.abs(lon):03d}_00_C01.tif'
     file_url = f'{URL}/{prefix}/{filename}'
     return file_url
 
