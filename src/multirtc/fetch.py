@@ -11,6 +11,21 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 
+EARTHDATA_LOGIN_DOMAIN = 'urs.earthdata.nasa.gov'
+
+
+def write_credentials_to_netrc_file(
+    username: str, password: str, domain: str = EARTHDATA_LOGIN_DOMAIN, append: bool = False
+):
+    """Write credentials to .netrc file"""
+    netrc_file = Path.home() / '.netrc'
+    if netrc_file.exists() and not append:
+        logging.warning(f'Using existing .netrc file: {netrc_file}')
+    else:
+        with open(netrc_file, 'a') as f:
+            f.write(f'machine {domain} login {username} password {password}\n')
+
+
 def _get_download_path(url: str, content_disposition: str | None = None, directory: Path | str = '.'):
     filename = None
     if content_disposition is not None:
