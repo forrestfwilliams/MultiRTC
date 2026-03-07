@@ -1,10 +1,17 @@
 import argparse
+import os
 
 from multirtc import dem, geocode, multirtc
+from multirtc.fetch import write_credentials_to_netrc_file
 from multirtc.multimetric import ale, point_target, rle
 
 
 def main():
+    username = os.getenv('EARTHDATA_USERNAME')
+    password = os.getenv('EARTHDATA_PASSWORD')
+    if username and password:
+        write_credentials_to_netrc_file(username, password, append=False)
+
     global_parser = argparse.ArgumentParser(
         prog='multirtc',
         description='ISCE3-based multi-sensor RTC and cal/val tool',
