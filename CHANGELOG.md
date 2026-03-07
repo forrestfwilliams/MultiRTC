@@ -10,6 +10,7 @@ and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 * Copernicus DEM for NISAR URLs to fix 404 errors.
+* Support for EARTHDATA credentials passed as env vars.
 
 ## [0.5.3]
 
