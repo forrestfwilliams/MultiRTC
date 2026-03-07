@@ -243,3 +243,7 @@ tags
 
 # Data
 src/multirtc/multimetric/*/
+
+# pixi environments
+.pixi/*
+!.pixi/config.toml
