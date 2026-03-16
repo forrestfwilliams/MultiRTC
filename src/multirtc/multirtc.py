@@ -93,7 +93,7 @@ def run_multirtc(
     else:
         raise NotImplementedError(
             'RTC creation is not supported for this input. For polar grid support, use the multirtc docker image:\n'
-            'https://github.com/forrestfwilliams/MultiRTC/pkgs/container/multirtc'
+            'https://github.com/MultiSAR/MultiRTC/pkgs/container/multirtc'
         )
 
 

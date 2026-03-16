@@ -6,7 +6,8 @@ build-backend = "setuptools.build_meta"
 name = "multirtc"
 requires-python = ">=3.10"
 authors = [
-    {name="Forrest Williams", email="ffwilliams2@alaska.edu"},
+    {name="Forrest Williams", email="forrestfwilliams@icloud.com"},
+    # Add names as preferred
 ]
 description = "Python library for multi-sensor RTC processing using the OPERA algorithm"
 license = {text = "BSD-3-Clause"}
@@ -45,8 +46,8 @@ dynamic = ["version", "readme"]
 develop = ["pytest", "pytest-cov", "pytest-console-scripts", "ruff"]
 
 [project.urls]
-Homepage = "https://github.com/forrestfwilliams/multirtc"
-Documentation = "https://github.com/forrestfwilliams/multirtc"
+Homepage = "https://github.com/multisar/multirtc"
+Documentation = "https://github.com/multisar/multirtc"
 
 [project.scripts]
 multirtc = "multirtc.__main__:main"

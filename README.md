@@ -32,7 +32,7 @@ Below is a list of relevant SAR data sources and their support status:
 
 I have done my best to accurately reflect the support status of each SAR image type, but please let me know if I have made any mistakes. Note that some commercial datasets used to use polar instead of range doppler image grids for specific images modes. This table is based on the image grid types currently being used.
 
-\*Polar image grid support is implemented via the [approach detailed by Piyush Agram](https://arxiv.org/abs/2503.07889v1) in his recent technical note. I have implemented his method in a fork of the main ISCE3 repo, which you can view [here](https://github.com/forrestfwilliams/isce3/tree/pfa). The long-term plan is to merge this into the main ISCE3 repo but until that is complete, polar grid support is only available via this project's `pfa`-suffixed docker containers. See the running via docker section for more details.
+\*Polar image grid support is implemented via the [approach detailed by Piyush Agram](https://arxiv.org/abs/2503.07889v1) in his recent technical note. I have implemented his method in a fork of the main ISCE3 repo, which you can view [here](https://github.com/multisar/isce3/tree/pfa). The long-term plan is to merge this into the main ISCE3 repo but until that is complete, polar grid support is only available via this project's `pfa`-suffixed docker containers. See the running via docker section for more details.
 
 ## Usage
 
@@ -61,7 +61,7 @@ docker run -it --rm \
     -e EARTHDATA_USERNAME=YOUR_USERNAME_HERE \
     -e EARTHDATA_PASSWORD=YOUR_PASSWORD_HERE \
     -v ~/LOCAL_PATH/PROJECT:/home/conda/PROJECT \
-    ghcr.io/forrestfwilliams/multirtc:VERSION.pfa \
+    ghcr.io/multisar/multirtc:VERSION.pfa \
     rtc PLATFORM SLC-GRANULE --resolution RESOLUTION --work-dir PROJECT
 ```
 The local `project1` directory can be a name of your choosing and should have the structure:
@@ -145,19 +145,19 @@ See `multirtc pt --help` for descriptions of each argument.
 ## When will support for [insert SAR provider here] products be added?
 We're currently working on this package on a "best effort" basis with no specific timeline for any particular dataset. We would love to add support for every SAR dataset ASAP, but we only have so much time to devote to this package. If you want a particular dataset to be prioritized there are several things you can do:
 
-- [Open an issue](https://github.com/forrestfwilliams/multirtc/issues/new) requesting support for your dataset and encourage others to like or comment on it.
+- [Open an issue](https://github.com/multisar/multirtc/issues/new) requesting support for your dataset and encourage others to like or comment on it.
 - Provides links to example datasets over the Rosamond, California corner reflector site (Lat/Lon 34.799,-118.095) for performing cal/val.
 - Reach out to us about funding the development required to add your dataset.
 
 ## Developer Setup
 1. Ensure that conda is installed on your system (we recommend using [mambaforge](https://github.com/conda-forge/miniforge#mambaforge) to reduce setup times).
-2. Download a local version of the `multirtc` repository (`git clone https://github.com/forrestfwilliams/multirtc.git`)
+2. Download a local version of the `multirtc` repository (`git clone https://github.com/multisar/multirtc.git`)
 3. In the base directory for this project call `mamba env create -f environment.yml` to create your Python environment, then activate it (`mamba activate multirtc`)
 4. Finally, install a development version of the package (`python -m pip install -e .`)
 
 To run all commands in sequence use:
 ```bash
-git clone https://github.com/forrestfwilliams/multirtc.git
+git clone https://github.com/multisar/multirtc.git
 cd multirtc
 mamba env create -f environment.yml
 mamba activate multirtc
@@ -179,4 +179,4 @@ Contributions to this project plugin are welcome! If you would like to contribut
 Want to talk about this project? We would love to hear from you!
 
 Found a bug? Want to request a feature?
-[open an issue](https://github.com/forrestfwilliams/multirtc/issues/new)
+[open an issue](https://github.com/multisar/multirtc/issues/new)
