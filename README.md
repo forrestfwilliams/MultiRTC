@@ -53,6 +53,24 @@ multirtc geocode PLATFORM SLC-GRANULE --resolution RESOLUTION --work-dir WORK-DI
 
 Output geocoded pixel values represent sigma0 power.
 
+## Sentinel-1 Download Source
+By default, Sentinel-1 data is downloaded from [ASF](https://search.asf.alaska.edu/). As an alternative, you can download from the [Copernicus Data Space Ecosystem (CDSE)](https://dataspace.copernicus.eu/) using the `--download-source CDSE` flag:
+
+```bash
+multirtc rtc S1 SLC-GRANULE --resolution RESOLUTION --work-dir WORK-DIR --download-source CDSE
+```
+The `--download-source` flag is also supported for the `geocode` subcommand.
+
+Both download sources require credentials:
+
+| Source | Environment Variables | `~/.netrc` machine | Registration |
+|--------|----------------------|-------------------|--------------|
+| ASF (default) | `EARTHDATA_USERNAME` / `EARTHDATA_PASSWORD` | `urs.earthdata.nasa.gov` | https://urs.earthdata.nasa.gov/users/new |
+| CDSE | `CDSE_USERNAME` / `CDSE_PASSWORD` | `dataspace.copernicus.eu` | https://dataspace.copernicus.eu/ |
+
+Credentials can be provided via environment variables or a `~/.netrc` entry as shown above.
+
+
 ### Running via Docker
 In addition to the main python interface, I've also provided an experimental docker container that contains full support for polar grid format SICD data. Encapsulating this functionality in a docker container is ncessary for now because it requires re-compiling a development version of ISCE3. The docker container can be run using a similar interface, with exception of needing to pass your EarthData credentials and the need to pass a mounted volume with an `input` and `output` directory inside:
 
@@ -71,6 +89,17 @@ PROJECT/
         |--input.slc (if needed)
     |--output/
 ```
+To use CDSE as the download source via Docker, pass your CDSE credentials and the `--download-source CDSE` flag:
+
+```bash
+docker run -it --rm \
+    -e CDSE_USERNAME=YOUR_CDSE_USERNAME \
+    -e CDSE_PASSWORD=YOUR_CDSE_PASSWORD \
+    -v ~/LOCAL_PATH/PROJECT:/home/conda/PROJECT \
+    ghcr.io/forrestfwilliams/multirtc:VERSION \
+    rtc S1 SLC-GRANULE --resolution RESOLUTION --work-dir PROJECT --download-source CDSE
+```
+
 If you're encountering `permission denied` errors when running the container, make sure that the input and output folders are owned by the same group and user IDs that the container uses (`chown -R 1000:1000 ~/LOCAL_PATH/PROJECT`).
 
 ### Output Layers

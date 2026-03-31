@@ -1,5 +1,6 @@
 """Create an RTC dataset for a multiple satellite platforms"""
 
+import logging
 from pathlib import Path
 
 from burst2safe.burst2safe import burst2safe
@@ -7,10 +8,16 @@ from s1reader.s1_orbit import retrieve_orbit_file
 
 from multirtc import dem
 from multirtc.base import Slc
+from multirtc.cdse import burst_to_parent_slc, download_slc_from_cdse, ensure_cdse_credentials
 from multirtc.create_rtc import rtc
 from multirtc.rtc_options import RtcOptions
 from multirtc.sentinel1 import S1BurstSlc
 from multirtc.sicd import SicdPfaSlc, SicdRzdSlc
+
+
+logger = logging.getLogger(__name__)
+
+DOWNLOAD_SOURCES = ['ASF', 'CDSE']
 
 
 SUPPORTED = ['S1', 'UMBRA', 'CAPELLA', 'ICEYE']
@@ -33,7 +40,7 @@ def prep_dirs(work_dir: Path | None = None) -> tuple[Path, Path]:
     return input_dir, output_dir
 
 
-def get_slc(platform: str, granule: str, input_dir: Path) -> Slc:
+def get_slc(platform: str, granule: str, input_dir: Path, download_source: str = 'ASF') -> Slc:
     """
     Get the SLC object for the specified platform and granule.
 
@@ -41,12 +48,18 @@ def get_slc(platform: str, granule: str, input_dir: Path) -> Slc:
         platform: Platform type (e.g., 'UMBRA').
         granule: Granule name if data is available in ASF archive, or filename if granule is already downloaded.
         input_dir: Directory containing the input data.
+        download_source: Source for downloading Sentinel-1 SLC data ('ASF' or 'CDSE').
 
     Returns:
         Slc subclass object for the specified platform and granule.
     """
     if platform == 'S1':
-        safe_path = burst2safe(granules=[granule], all_anns=True, work_dir=input_dir)
+        if download_source == 'CDSE':
+            ensure_cdse_credentials()
+            parent_slc = burst_to_parent_slc(granule)
+            safe_path = download_slc_from_cdse(parent_slc, input_dir)
+        else:
+            safe_path = burst2safe(granules=[granule], all_anns=True, work_dir=input_dir)
         orbit_path = Path(retrieve_orbit_file(safe_path.name, str(input_dir), concatenate=True))
         slc = S1BurstSlc(safe_path, orbit_path, granule)
     elif platform in ['CAPELLA', 'ICEYE', 'UMBRA']:
@@ -61,7 +74,13 @@ def get_slc(platform: str, granule: str, input_dir: Path) -> Slc:
 
 
 def run_multirtc(
-    platform: str, granule: str, resolution: int, work_dir: Path, dem_path: Path | None = None, apply_rtc=True
+    platform: str,
+    granule: str,
+    resolution: int,
+    work_dir: Path,
+    dem_path: Path | None = None,
+    apply_rtc=True,
+    download_source: str = 'ASF',
 ) -> None:
     """Create an RTC or Geocoded dataset using the OPERA algorithm.
 
@@ -72,9 +91,10 @@ def run_multirtc(
         work_dir: Working directory for processing.
         dem_path: Path to the DEM to use for processing. If None, the NISAR DEM will be downloaded.
         apply_rtc: If True perform radiometric correction; if False, only geocode.
+        download_source: Source for downloading Sentinel-1 SLC data ('ASF' or 'CDSE').
     """
     input_dir, output_dir = prep_dirs(work_dir)
-    slc = get_slc(platform, granule, input_dir)
+    slc = get_slc(platform, granule, input_dir, download_source=download_source)
     if dem_path is None:
         dem_path = input_dir / 'dem.tif'
         dem.download_opera_dem_for_footprint(dem_path, slc.footprint)
@@ -103,6 +123,18 @@ def create_parser(parser):
     parser.add_argument('--resolution', type=float, help='Resolution of the output RTC (m)')
     parser.add_argument('--dem', type=Path, default=None, help='Path to the DEM to use for processing')
     parser.add_argument('--work-dir', type=Path, default=None, help='Working directory for processing')
+    parser.add_argument(
+        '--download-source',
+        type=str,
+        choices=DOWNLOAD_SOURCES,
+        default='ASF',
+        help=(
+            "Source for downloading Sentinel-1 SLC data. "
+            "'ASF' uses Alaska Satellite Facility (default). "
+            "'CDSE' uses Copernicus Data Space Ecosystem "
+            "(requires CDSE_USERNAME/CDSE_PASSWORD env vars or ~/.netrc)."
+        ),
+    )
     return parser
 
 
@@ -111,4 +143,12 @@ def run(args):
         assert args.dem.exists(), f'DEM file {args.dem} does not exist.'
     if args.work_dir is None:
         args.work_dir = Path.cwd()
-    run_multirtc(args.platform, args.granule, args.resolution, args.work_dir, args.dem, apply_rtc=True)
+    run_multirtc(
+        args.platform,
+        args.granule,
+        args.resolution,
+        args.work_dir,
+        args.dem,
+        apply_rtc=True,
+        download_source=args.download_source,
+    )

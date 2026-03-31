@@ -2,6 +2,7 @@ import argparse
 import os
 
 from multirtc import dem, geocode, multirtc
+from multirtc.cdse import ensure_cdse_credentials
 from multirtc.fetch import write_credentials_to_netrc_file
 from multirtc.multimetric import ale, point_target, rle
 
@@ -11,6 +12,11 @@ def main():
     password = os.getenv('EARTHDATA_PASSWORD')
     if username and password:
         write_credentials_to_netrc_file(username, password, append=False)
+
+    cdse_username = os.getenv('CDSE_USERNAME')
+    cdse_password = os.getenv('CDSE_PASSWORD')
+    if cdse_username and cdse_password:
+        ensure_cdse_credentials(cdse_username, cdse_password)
 
     global_parser = argparse.ArgumentParser(
         prog='multirtc',
