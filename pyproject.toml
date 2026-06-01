@@ -115,6 +115,10 @@ requests = "*"
 lxml = "*"
 shapely = "*"
 pyproj = "*"
+pysolid = "*"
+backoff = "*"
+ruamel = "*"
+yamale = "*"
 sarpy = "*"
 burst2safe = "*"
 tqdm = "*"
@@ -173,7 +177,7 @@ cmd = [
     "pip",
     "install",
     "h5py",
-    "git+https://github.com/isce-framework/isce3.git",  # before v0.25.0
+    "git+https://github.com/isce-framework/isce3.git",
 ]
 depends-on = []
 
@@ -183,8 +187,9 @@ cmd = [
     "-m",
     "pip",
     "install",
-    "git+https://github.com/opera-adt/COMPASS.git@v0.5.6",
-    "git+https://github.com/isce-framework/s1-reader.git@v0.2.5",
+    "ruamel.yaml",
+    "git+https://github.com/opera-adt/COMPASS.git",
+    "git+https://github.com/isce-framework/s1-reader.git",
 ]
 depends-on = ["install-isce3"]
 
@@ -197,7 +202,7 @@ cmd = [
     "-e",
     ".",
 ]
-depends-on = ["install-isce3"]
+depends-on = ["install-radar"]
 
 [tool.pixi.tasks.tests]
 cmd = [
