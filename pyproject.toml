@@ -148,10 +148,6 @@ pyre = "*"
 [tool.pixi.target.osx-arm64.dependencies]
 pyre = "*"
 
-[tool.pixi.pypi-dependencies]
-snaphu = "*"
-raider = {git = "https://github.com/dbekaert/RAiDER.git", rev = "v0.5.5" }
-
 [tool.pixi.feature.pycharm.dependencies]
 pixi-pycharm = "*"
 
