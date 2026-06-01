@@ -4,7 +4,9 @@ from multirtc import dem
 
 
 def test_get_granule_url():
-    test_url = 'https://nisar.asf.earthdatacloud.nasa.gov/STATIC/DEM/v1.1/EPSG4326/S10_W020/DEM_S01_00_W001_00.tif'
+    test_url = (
+        'https://nisar.asf.earthdatacloud.nasa.gov/NISAR/DEM/v1.2/EPSG4326/S10/S10_W020/DEM_S01_00_W001_00_C01.tif'
+    )
     url = dem.get_dem_granule_url(-1, -1)
     assert url == test_url
 

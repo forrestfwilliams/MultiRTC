@@ -11,6 +11,21 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 
+EARTHDATA_LOGIN_DOMAIN = 'urs.earthdata.nasa.gov'
+
+
+def write_credentials_to_netrc_file(
+    username: str, password: str, domain: str = EARTHDATA_LOGIN_DOMAIN, append: bool = False
+):
+    """Write credentials to .netrc file"""
+    netrc_file = Path.home() / '.netrc'
+    if netrc_file.exists() and not append:
+        logging.warning(f'Using existing .netrc file: {netrc_file}')
+    else:
+        with open(netrc_file, 'a') as f:
+            f.write(f'machine {domain} login {username} password {password}\n')
+
+
 def _get_download_path(url: str, content_disposition: str | None = None, directory: Path | str = '.'):
     filename = None
     if content_disposition is not None:
@@ -63,13 +78,22 @@ def download_file(
     session.mount('https://', HTTPAdapter(max_retries=retry_strategy))
     session.mount('http://', HTTPAdapter(max_retries=retry_strategy))
 
-    with session.get(url, stream=True) as s:
-        download_path = _get_download_path(s.url, s.headers.get('content-disposition'), directory)
-        s.raise_for_status()
-        with open(download_path, 'wb') as f:
-            for chunk in s.iter_content(chunk_size=chunk_size):
-                if chunk:
-                    f.write(chunk)
-    session.close()
+    download_path = None
+    try:
+        with session.get(url, stream=True) as s:
+            download_path = _get_download_path(s.url, s.headers.get('content-disposition'), directory)
+            s.raise_for_status()
+            with open(download_path, 'wb') as f:
+                for chunk in s.iter_content(chunk_size=chunk_size):
+                    if chunk:
+                        f.write(chunk)
+            logging.info(f'Download successful: {url}')
+    except requests.exceptions.RequestException:
+        logging.exception(f'Download failed: {url}')
+        if download_path is not None:
+            download_path.unlink(missing_ok=True)  # delete any partial downloads
+        raise
+    finally:
+        session.close()
 
     return str(download_path)

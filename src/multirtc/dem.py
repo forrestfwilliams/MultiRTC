@@ -15,7 +15,7 @@ from multirtc.fetch import download_file
 
 
 gdal.UseExceptions()
-URL = 'https://nisar.asf.earthdatacloud.nasa.gov/STATIC/DEM/v1.1/EPSG4326'
+URL = 'https://nisar.asf.earthdatacloud.nasa.gov/NISAR/DEM/v1.2/EPSG4326'
 EGM2008_GEOID = {
     'WORLD': [
         '/vsicurl/https://asf-dem-west.s3.amazonaws.com/GEOID/us_nga_egm2008_1.tif',
@@ -118,7 +118,7 @@ def check_antimeridean(poly: Polygon) -> list[Polygon]:
 
 
 def get_dem_granule_url(lat: int, lon: int) -> str:
-    """Generate the URL for the OPERA DEM granule based on latitude and longitude.
+    """Generate the URL for the Modified Copernicus DEM for NISAR granule based on latitude and longitude.
 
     Args:
         lat: Latitude in degrees.
@@ -133,8 +133,8 @@ def get_dem_granule_url(lat: int, lon: int) -> str:
     lon_tens = np.floor_divide(lon, 20) * 20
     lon_cardinal = 'W' if lon_tens < 0 else 'E'
 
-    prefix = f'{lat_cardinal}{np.abs(lat_tens):02d}_{lon_cardinal}{np.abs(lon_tens):03d}'
-    filename = f'DEM_{lat_cardinal}{np.abs(lat):02d}_00_{lon_cardinal}{np.abs(lon):03d}_00.tif'
+    prefix = f'{lat_cardinal}{np.abs(lat_tens):02d}/{lat_cardinal}{np.abs(lat_tens):02d}_{lon_cardinal}{np.abs(lon_tens):03d}'
+    filename = f'DEM_{lat_cardinal}{np.abs(lat):02d}_00_{lon_cardinal}{np.abs(lon):03d}_00_C01.tif'
     file_url = f'{URL}/{prefix}/{filename}'
     return file_url
 
@@ -156,7 +156,7 @@ def get_latlon_pairs(polygon: Polygon) -> list[tuple[float, float]]:
 
 def download_opera_dem_for_footprint(output_path: Path, footprint: Polygon, buffer: float = 0.2) -> None:
     """
-    Download the OPERA DEM for a given footprint and save it to the specified output path.
+    Download the Modified Copernicus DEM for NISAR for a given footprint and save it to the specified output path.
 
     Args:
         output_path: Path where the DEM will be saved.

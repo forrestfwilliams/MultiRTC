@@ -11,6 +11,18 @@ and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 * Pixi is now used in place of Conda for installation and depedency management
 
+## [0.5.4]
+
+### Fixed
+* Copernicus DEM for NISAR URLs to fix 404 errors.
+* Support for EARTHDATA credentials passed as env vars.
+
+## [0.5.3]
+
+### Changed
+* Change "OPERA DEM" references to "Modified Copernicus DEM for NISAR"
+* Update Modified Copernicus DEM for NISAR endpoints for v1.2
+* Add `fetch.download_file()` exception handling and delete partial downloads
 
 ## [0.5.2]
 
