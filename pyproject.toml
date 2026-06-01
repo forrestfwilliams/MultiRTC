@@ -27,11 +27,9 @@ dependencies = [
     "lxml",
     "shapely",
     "pyproj",
-    "s1reader",
     "sarpy",
     "burst2safe",
     "tqdm",
-    "requests",
     "urllib3",
     "matplotlib",
     "pandas",
@@ -93,3 +91,118 @@ convention = "google"
 [tool.ruff.lint.isort]
 case-sensitive = true
 lines-after-imports = 2
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64", "linux-aarch64", "osx-64", "osx-arm64"]
+
+[tool.pixi.pypi-options]
+no-build-isolation = ['isce3']
+
+[tool.pixi.dependencies]
+pip = "*"
+gdal = ">=3.0"
+libgdal-netcdf = "*"
+numpy = ">=1.20"
+boto3 = "*"
+h5netcdf = "*"
+hdf5 = "*"
+cxx-compiler = "*"
+pkgconfig = "*"
+fftw = "*"
+pybind11 = "*"
+requests = "*"
+lxml = "*"
+shapely = "*"
+pyproj = "*"
+pysolid = "*"
+backoff = "*"
+ruamel = "*"
+yamale = "*"
+sarpy = "*"
+burst2safe = "*"
+tqdm = "*"
+urllib3 = "*"
+matplotlib = "*"
+pandas = "*"
+lmfit = "*"
+scipy = "*"
+scikit-image = "*"
+setuptools = "*"
+setuptools_scm = "*"
+wheel = "*"
+pytest = "*"
+pytest-console-scripts = "*"
+pytest-cov = "*"
+ruff = "*"
+
+[tool.pixi.target.linux-64.dependencies]
+pyre = "*"
+
+[tool.pixi.target.linux-aarch64.pypi-dependencies]
+pyre = "*"
+
+[tool.pixi.target.osx-64.dependencies]
+pyre = "*"
+
+[tool.pixi.target.osx-arm64.dependencies]
+pyre = "*"
+
+[tool.pixi.feature.pycharm.dependencies]
+pixi-pycharm = "*"
+
+[tool.pixi.feature.py310.dependencies]
+python = "3.10.*"
+
+[tool.pixi.feature.py311.dependencies]
+python = "3.11.*"
+
+[tool.pixi.feature.py312.dependencies]
+python = "3.12.*"
+
+[tool.pixi.environments]
+default = { features = ["develop", "pycharm"], solve-group = "default" }
+py310 = { features = ["develop", "py310"]}
+py311 = { features = ["develop", "py311"]}
+py312 = { features = ["develop", "py312"], solve-group = "default"}
+
+[tool.pixi.tasks.install-isce3]
+cmd = [
+    "python",
+    "-m",
+    "pip",
+    "install",
+    "h5py",
+    "git+https://github.com/isce-framework/isce3.git",
+]
+depends-on = []
+
+[tool.pixi.tasks.install-radar]
+cmd = [
+    "python",
+    "-m",
+    "pip",
+    "install",
+    "ruamel.yaml",
+    "git+https://github.com/opera-adt/COMPASS.git",
+    "git+https://github.com/isce-framework/s1-reader.git",
+]
+depends-on = ["install-isce3"]
+
+[tool.pixi.tasks.install-editable]
+cmd = [
+    "python",
+    "-m",
+    "pip",
+    "install",
+    "-e",
+    ".",
+]
+depends-on = ["install-radar"]
+
+[tool.pixi.tasks.tests]
+cmd = [
+    "pytest",
+    "--cov=multirtc",
+]
+depends-on = ["install-editable"]

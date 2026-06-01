@@ -34,6 +34,29 @@ I have done my best to accurately reflect the support status of each SAR image t
 
 \*Polar image grid support is implemented via the [approach detailed by Piyush Agram](https://arxiv.org/abs/2503.07889v1) in his recent technical note. I have implemented his method in a fork of the main ISCE3 repo, which you can view [here](https://github.com/forrestfwilliams/isce3/tree/pfa). The long-term plan is to merge this into the main ISCE3 repo but until that is complete, polar grid support is only available via this project's `pfa`-suffixed docker containers. See the running via docker section for more details.
 
+## Installation
+
+1. Ensure that pixi is installed on your system: <https://pixi.sh/latest/installation/>.
+2. Clone the `MultiRTC` repository and navigate to the root directory of this project
+   ```bash
+   git clone https://github.com/ASFHyP3/MultiRTC.git
+   cd MultiRTC
+   ```
+3. setup the development environment
+   ```bash
+    pixi run install-editable
+   ```
+4. (optional) [traditional conda-like activation](https://pixi.sh/latest/workspace/environment/#traditional-conda-activate-like-activation) of the pixi environment
+   ```bash
+   eval "$(pixi shell-hook)"
+   ```
+
+    > [!TIP]
+    > If you skip this, you'll need to prefix commands with `pixi run`.
+5. (optional) Setup you IDE to work with pixi:
+   * PyCharm: https://pixi.sh/dev/integration/editor/jetbrains/
+   * VSCode: https://pixi.sh/dev/integration/editor/vscode/
+
 ## Usage
 
 To create an RTC, use the `multirtc` CLI entrypoint using the following pattern:
